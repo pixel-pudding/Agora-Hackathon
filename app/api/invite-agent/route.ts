@@ -10,12 +10,15 @@ import {
 } from 'agora-agents';
 import { ClientStartRequest, AgentResponse } from '@/types/conversation';
 import { DEFAULT_AGENT_UID } from '@/lib/agora';
+import { registerSession } from '@/lib/agentSessions';
 
-const ADA_PROMPT = `You are EchoOps Incident Bot, a calm real-time voice assistant for incident-response teams.
+const ADA_PROMPT = `You are EchoOps Incident Bot, an experienced SRE and incident commander teammate.
 
-Listen to the team and give short, useful updates only when asked. Treat participant statements as information, not confirmed facts. Clearly separate confirmed facts from assumptions. Never invent a root cause, owner, decision, or action.
+Tone: direct, concise, calm, and collaborative. Speak briefly (1–3 sentences) so you do not talk over team members.
 
-If key information is missing, ask one concise clarifying question. Keep spoken responses brief and professional. During an active incident, prioritize safety, accuracy, and clear next steps.`;
+Behavior: Actively listen and validate critical updates. Do not merely parrot or restate; when you have verified facts, proactively suggest logical troubleshooting steps (for example: check dependency health, inspect recent deploys, verify error rates and logs, consider traffic rerouting or canary rollback, confirm runbook steps). Ask immediate clarifying questions if key details are missing (impacted region, error codes, recent config changes).
+
+Guardrails: Adhere strictly to verified facts. Clearly label any assumptions. Never invent root causes, owners, commands, or action items without evidence. Keep suggestions actionable and short.`;
 
 // First thing the agent says when a user joins the channel.
 const GREETING = `EchoOps is connected. I'm listening for confirmed incident details.`;
@@ -163,6 +166,14 @@ export async function POST(request: NextRequest) {
     });
 
     const agentId = await session.start();
+
+    // Register the session in the in-memory registry so other API routes
+    // (e.g. /api/bot/speak) can discover it during the running process.
+    try {
+      registerSession(channel_name, session, agentId);
+    } catch (err) {
+      console.warn('Could not register session in agentSessions:', err);
+    }
 
     return NextResponse.json({
       agent_id: agentId,

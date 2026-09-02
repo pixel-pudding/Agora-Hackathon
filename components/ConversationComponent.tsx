@@ -20,9 +20,11 @@ import {
   type TranscriptHelperItem,
   type UserTranscription,
   type AgentTranscription,
+  TurnStatus,
 } from 'agora-agent-client-toolkit';
 import { AgentVisualizer } from 'agora-agent-uikit';
 import { MicButtonWithVisualizer } from 'agora-agent-uikit/rtc';
+import { Button } from '@/components/ui/button';
 import { DEFAULT_AGENT_UID } from '@/lib/agora';
 import {
   getCurrentInProgressMessage,
@@ -70,6 +72,31 @@ type RtmSalStatusPayload = {
   timestamp?: number;
 };
 
+// Small presentational chip for participants showing active-speaker animation.
+function ParticipantChip({
+  label,
+  isActive,
+}: {
+  label: string;
+  isActive?: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-2 rounded-md border border-border/60 bg-card/80 px-3 py-1 text-sm">
+      <div className="flex items-center gap-1">
+        <span className={`inline-block h-2 w-2 rounded-full ${isActive ? 'bg-green-400 animate-pulse' : 'bg-gray-400'}`} />
+      </div>
+      <div className="truncate text-xs text-foreground">{label}</div>
+      {isActive && (
+        <div className="ml-2 flex items-center gap-1">
+          <span className="inline-block h-3 w-0.5 animate-[wave_800ms_linear_infinite] bg-green-400" />
+          <span className="inline-block h-4 w-0.5 animate-[wave_1200ms_linear_infinite] bg-green-400" />
+          <style>{`@keyframes wave {0% {transform: scaleY(0.3);} 50% {transform: scaleY(1);} 100% {transform: scaleY(0.3);} }`}</style>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Type guard for RTM signaling-level error payloads (object: 'message.error').
 function isRtmMessageErrorPayload(
   value: unknown,
@@ -95,6 +122,7 @@ export default function ConversationComponent({
   rtmClient,
   onTokenWillExpire,
   onEndConversation,
+  isStopping,
 }: ConversationComponentProps) {
   const client = useRTCClient();
   const remoteUsers = useRemoteUsers();
@@ -231,8 +259,40 @@ export default function ConversationComponent({
           return;
         }
 
+        // Keep a ref of forwarded turn ids to avoid duplicate forwarding.
+        const forwardedRef = { ids: new Set<string>() } as { ids: Set<string> };
+
         ai.on(AgoraVoiceAIEvents.TRANSCRIPT_UPDATED, (t) => {
           setRawTranscript([...t]);
+
+          try {
+            // Forward completed (not IN_PROGRESS) turns to our pipeline.
+            (t || []).forEach((item: TranscriptHelperItem<any>) => {
+              const status = item.status as unknown as number;
+              if (status === TurnStatus.IN_PROGRESS) return;
+              const id = String(item.turn_id || `${item.uid}-${item._time || Date.now()}`);
+              if (forwardedRef.ids.has(id)) return;
+              forwardedRef.ids.add(id);
+
+              const payload = {
+                audio_stream: null,
+                text: item.text,
+                speaker_id: item.uid,
+                channel: agoraData.channel,
+                ts: typeof item._time === 'number' ? item._time : Date.now(),
+                turn_id: item.turn_id,
+              };
+
+              // Fire-and-forget; failures are logged server-side.
+              void fetch('/api/forward-audio', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+              }).catch((e) => console.warn('forward-audio failed:', e));
+            });
+          } catch (err) {
+            console.warn('Error forwarding transcript:', err);
+          }
         });
         // Agent state drives the visualizer, independent of RTC audio presence.
         ai.on(AgoraVoiceAIEvents.AGENT_STATE_CHANGED, (_, event) =>
@@ -365,6 +425,11 @@ export default function ConversationComponent({
     return normalizeTranscript(rawTranscript, String(client.uid));
   }, [rawTranscript, client.uid]);
 
+  // Active in-progress message for UI speaker indicator
+  const activeInProgress = useMemo(() => {
+    return transcript.find((entry) => entry.status === TurnStatus.IN_PROGRESS) ?? null;
+  }, [transcript]);
+
   // Completed (END + INTERRUPTED) messages shown as history.
   // INTERRUPTED must be included — if the agent's first turn is cut off,
   // messageList stays empty and the first interrupted turn is never shown.
@@ -471,13 +536,25 @@ export default function ConversationComponent({
   return (
     <QuickstartConversationLayout
       statusPanel={
-        <ConnectionStatusPanel
-          connectionState={connectionState}
-          connectionSeverity={connectionSeverity}
-          connectionIssues={connectionIssues}
-          isOpen={isConnectionDetailsOpen}
-          onToggle={() => setIsConnectionDetailsOpen((open) => !open)}
-        />
+        <div className="flex items-center gap-3">
+          <div className="flex flex-col text-sm">
+            <span className="font-semibold">Channel</span>
+            <span className="text-muted-foreground truncate">{agoraData.channel ?? 'unknown'}</span>
+          </div>
+          <div>
+            <ConnectionStatusPanel
+              connectionState={connectionState}
+              connectionSeverity={connectionSeverity}
+              connectionIssues={connectionIssues}
+              isOpen={isConnectionDetailsOpen}
+              onToggle={() => setIsConnectionDetailsOpen((open) => !open)}
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className={`inline-flex h-2 w-2 rounded-full ${isAgentConnected ? 'bg-green-500' : 'bg-gray-400'}`} />
+            <span className="text-xs text-muted-foreground">{isAgentConnected ? 'Bot live' : 'Bot not present'}</span>
+          </div>
+        </div>
       }
       pipelineMetrics={<QuickstartPipelineMetrics metrics={agentMetrics} />}
       transcriptPanel={
@@ -488,12 +565,18 @@ export default function ConversationComponent({
         />
       }
       visualizer={
-        <div
-          className="relative flex h-full min-h-[20rem] w-full max-w-4xl items-center justify-center"
-          role="region"
-          aria-label="AI agent status visualization"
-        >
-          <AgentVisualizer state={visualizerState} size="lg" />
+        <div className="relative flex h-full min-h-[20rem] w-full max-w-4xl flex-col items-center justify-center" role="region" aria-label="AI agent status visualization">
+          <div className="mb-3 w-full flex items-center justify-center">
+            <AgentVisualizer state={visualizerState} size="lg" />
+          </div>
+          <div className="mt-2 flex w-full max-w-4xl flex-wrap items-center justify-center gap-3">
+            {/* Participant chips with active speaker indicator */}
+            <ParticipantChip label={`You (${client.uid ?? 'me'})`} isActive={String(activeInProgress?.uid) === String(client.uid)} />
+            <ParticipantChip label={`EchoOps Bot (${agentUID})`} isActive={String(activeInProgress?.uid) === agentUID} />
+            {remoteUsers.map((user) => (
+              <ParticipantChip key={user.uid} label={`User ${user.uid}`} isActive={String(activeInProgress?.uid) === String(user.uid)} />
+            ))}
+          </div>
           {remoteUsers.map((user) => (
             <div key={user.uid} className="hidden">
               <RemoteUser user={user} />
@@ -520,6 +603,50 @@ export default function ConversationComponent({
             />
           </div>
           <MicrophoneSelector localMicrophoneTrack={localMicrophoneTrack} />
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              onClick={() => {
+                try {
+                  const channel = agoraData.channel ?? 'unknown-channel';
+                  const now = new Date();
+                  const ts = now.toISOString();
+                  const entries = transcript.map((t) => ({
+                    speaker: t.uid,
+                    ts: typeof t._time === 'number' ? normalizeTimestampMs(t._time) : undefined,
+                    text: t.text ?? '',
+                    status: t.status,
+                  }));
+
+                  const mdLines: string[] = [];
+                  mdLines.push(`# Incident Summary — ${channel}`);
+                  mdLines.push(`
+Generated: ${ts}\n`);
+                  mdLines.push(`## Timeline`);
+                  entries.forEach((e) => {
+                    const date = e.ts ? new Date(e.ts).toISOString() : '';
+                    mdLines.push(`- **Speaker ${e.speaker}** — ${date}`);
+                    mdLines.push(`  \n\n  ${e.text}\n`);
+                  });
+
+                  const filename = `incident-summary-${channel}-${Math.floor(Date.now()/1000)}.md`;
+                  const blob = new Blob([mdLines.join('\n')], { type: 'text/markdown' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = filename;
+                  document.body.appendChild(a);
+                  a.click();
+                  URL.revokeObjectURL(url);
+                  a.remove();
+                } catch (err) {
+                  console.error('Failed to save incident summary:', err);
+                }
+              }}
+            >
+              Save Incident Summary
+            </Button>
+          </div>
         </div>
       }
       onEndConversation={handleEndConversation}

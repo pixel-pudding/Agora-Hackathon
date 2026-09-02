@@ -69,6 +69,7 @@ export default function LandingPage() {
   const [agoraData, setAgoraData] = useState<AgoraTokenData | null>(null);
   const [rtmClient, setRtmClient] = useState<RTMClient | null>(null);
   const [agentJoinError, setAgentJoinError] = useState(false);
+  const [isStopping, setIsStopping] = useState(false);
 
   const handleStartConversation = async () => {
     setIsLoading(true);
@@ -183,19 +184,31 @@ export default function LandingPage() {
   );
 
   const handleEndConversation = async () => {
+    // Prevent duplicate stop requests.
+    if (isStopping) return;
+    setIsStopping(true);
+
     // Stop the AI agent
     if (agoraData?.agentId) {
       try {
-        // console.log('Stopping agent:', agoraData.agentId);
         const response = await fetch('/api/stop-conversation', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ agent_id: agoraData.agentId }),
         });
+
         if (!response.ok) {
-          console.error('Failed to stop agent:', await response.text());
+          const text = await response.text();
+          // Treat known 'already stopping' 400 responses as expected exit state.
+          const isExpectedConflict =
+            response.status === 400 &&
+            /ErrConflict|already in the process of shutting down/i.test(text);
+          if (isExpectedConflict) {
+            console.info('Agent stop conflict (expected):', text);
+          } else {
+            console.error('Failed to stop agent:', text);
+          }
         }
-        // else console.log('Agent stopped successfully');
       } catch (error) {
         console.error('Error stopping agent:', error);
       }
@@ -205,6 +218,7 @@ export default function LandingPage() {
     rtmClient?.logout().catch((err) => console.error('RTM logout error:', err));
     setRtmClient(null);
     setShowConversation(false);
+    setIsStopping(false);
   };
 
   return (
@@ -250,6 +264,7 @@ export default function LandingPage() {
                       rtmClient={rtmClient}
                       onTokenWillExpire={handleTokenWillExpire}
                       onEndConversation={handleEndConversation}
+                      isStopping={isStopping}
                     />
                   </AgoraProvider>
                 </ErrorBoundary>

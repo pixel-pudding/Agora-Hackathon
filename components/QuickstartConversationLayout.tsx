@@ -11,6 +11,7 @@ type QuickstartConversationLayoutProps = {
   visualizer: ReactNode;
   controls: ReactNode;
   onEndConversation: () => void;
+  isEnding?: boolean;
 };
 
 export function QuickstartConversationLayout({
@@ -20,6 +21,7 @@ export function QuickstartConversationLayout({
   visualizer,
   controls,
   onEndConversation,
+  isEnding,
 }: QuickstartConversationLayoutProps) {
   return (
     <div className="flex min-h-0 flex-1 flex-col text-left">
@@ -49,8 +51,9 @@ export function QuickstartConversationLayout({
             onClick={onEndConversation}
             aria-label="End conversation with AI agent"
             title="End conversation"
+            disabled={isEnding}
           >
-            End Conversation
+            {isEnding ? 'Ending...' : 'End Conversation'}
           </Button>
         </div>
       </header>
