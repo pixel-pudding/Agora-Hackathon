@@ -7,7 +7,7 @@
 - Next.js App Router frontend and API routes in one deployable app.
 - Browser joins Agora RTC channel and uses RTM for transcript/state/metrics/errors.
 - Server-side routes mint token and call Agora Agent Server SDK.
-- Agent executes STT -> LLM -> TTS pipeline in Agora cloud.
+- Agent executes STT -> LLM -> TTS pipeline in Agora cloud. EchoOps leaves the agent's `remoteUids` unrestricted so it can hear every participant in an incident room.
 
 ## Component Graph
 

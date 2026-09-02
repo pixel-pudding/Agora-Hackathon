@@ -44,6 +44,12 @@ Bootstrap behavior:
 - Edit `components/LandingPage.tsx`.
 - Keep invite + RTM setup parallelized before conversation mount.
 
+## Join an EchoOps Incident Room
+
+1. Enter a room name such as `incident-123` on the pre-call card, or leave it blank for a generated room.
+2. The browser requests a scoped RTC + RTM token for that channel.
+3. The EchoOps bot is invited to the same channel and joins as the shared agent UID.
+
 ## Change Transcript Rendering
 
 1. Update transforms in `lib/conversation.ts`.

@@ -56,6 +56,7 @@ const AgoraProvider = dynamic(
 
 export default function LandingPage() {
   const [showConversation, setShowConversation] = useState(false);
+  const [channelName, setChannelName] = useState('');
 
   // Preload heavy modules on mount so they're already cached when the user
   // clicks "Try it Now" — eliminates the ~1.8s dynamic-import delay.
@@ -77,7 +78,12 @@ export default function LandingPage() {
     try {
       // 1. Fetch RTC token + channel
       // console.log('Fetching Agora token...');
-      const agoraResponse = await fetch('/api/generate-agora-token');
+      const channelQuery = channelName.trim()
+        ? `?channel=${encodeURIComponent(channelName.trim())}`
+        : '';
+      const agoraResponse = await fetch(
+        `/api/generate-agora-token${channelQuery}`,
+      );
       const responseData = await agoraResponse.json();
       // console.log('Agora token response: uid =', responseData.uid, 'channel =', responseData.channel);
 
@@ -222,6 +228,8 @@ export default function LandingPage() {
             <QuickstartPreCallCard
               isLoading={isLoading}
               error={error}
+              channelName={channelName}
+              onChannelNameChange={setChannelName}
               onStartConversation={handleStartConversation}
             />
           ) : agoraData && rtmClient ? (

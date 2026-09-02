@@ -9,7 +9,7 @@
 Query params:
 
 - `uid` optional; invalid/zero resolves to random RTM-safe UID.
-- `channel` optional; defaults to generated `ai-conversation-<ts>-<rand>`.
+- `channel` optional; defaults to generated `ai-conversation-<ts>-<rand>`. A supplied room name must be 1-64 characters using letters, numbers, hyphens, or underscores.
 
 Success response:
 

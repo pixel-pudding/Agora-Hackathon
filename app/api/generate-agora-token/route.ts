@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { RtcTokenBuilder, RtcRole } from 'agora-token';
 
 const EXPIRATION_TIME_IN_SECONDS = 3600;
+const CHANNEL_NAME_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 
 function generateChannelName(): string {
   const timestamp = Date.now();
@@ -27,7 +28,17 @@ export async function GET(request: NextRequest) {
   const uid = Number.isNaN(parsedUid) || parsedUid <= 0
     ? Math.floor(Math.random() * 9_999_000) + 1000
     : parsedUid;
-  const channelName = searchParams.get('channel') || generateChannelName();
+  const requestedChannel = searchParams.get('channel')?.trim();
+  if (requestedChannel && !CHANNEL_NAME_PATTERN.test(requestedChannel)) {
+    return NextResponse.json(
+      {
+        error:
+          'Channel names must be 1-64 characters and use only letters, numbers, hyphens, or underscores',
+      },
+      { status: 400 },
+    );
+  }
+  const channelName = requestedChannel || generateChannelName();
 
   const expirationTime =
     Math.floor(Date.now() / 1000) + EXPIRATION_TIME_IN_SECONDS;

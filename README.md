@@ -1,10 +1,10 @@
-# Agora Conversational AI Next.js Quickstart
+# EchoOps Voice Room
 
 [![Build](https://github.com/AgoraIO-Conversational-AI/agent-quickstart-nextjs/actions/workflows/build-check.yml/badge.svg)](https://github.com/AgoraIO-Conversational-AI/agent-quickstart-nextjs/actions/workflows/build-check.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D22-brightgreen)](https://nodejs.org/)
 
-Build a production-style voice agent in minutes with Next.js and the Agora Conversational AI Engine, including voice agent visualizer ([Agent UIKit](https://agoraio-conversational-ai.github.io/agent-uikit/)), live transcript, and real-time pipeline latency via `AGENT_METRICS` ([Agent Toolkit](https://github.com/AgoraIO-Conversational-AI/agent-client-toolkit-ts)).
+EchoOps is a real-time incident voice room built with Next.js and Agora Conversational AI. It includes a shared incident-room name, browser RTC audio, live transcripts, a virtual EchoOps bot, and Agora-managed speech-to-text, LLM, and text-to-speech.
 
 ## Prerequisites
 
@@ -22,7 +22,7 @@ Getting started is quick and easy: install the CLI _(skip if you already have it
    macOS and Linux:
 
    ```bash
-   curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh -s -- --add-to-path
+   curl -fsSL https://dl.agora.io/cli/install.sh | sh
    ```
 
    Windows PowerShell:
@@ -52,7 +52,7 @@ Getting started is quick and easy: install the CLI _(skip if you already have it
    pnpm dev
    ```
 
-3. Open [http://localhost:3000](http://localhost:3000) and click **Start conversation**.
+3. Open [http://localhost:3000](http://localhost:3000), enter an incident room name to join an existing room (or leave it blank to create one), then click **Join Incident Room**.
 
 If the agent does not join or transcripts do not appear, run **`agora project doctor --deep`** to check credentials, feature enablement, network reachability, and local env binding.
 

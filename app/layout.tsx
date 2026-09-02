@@ -8,9 +8,9 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: 'Talk to your voice agent | Agora',
+  title: 'EchoOps Incident Room',
   description:
-    "Next.js quickstart: real-time voice agent with live transcript, streaming audio, and low latency from Agora's Conversational AI Engine—API routes in one repo.",
+    'Real-time incident voice rooms with an EchoOps conversational AI assistant.',
   icons: {
     icon: [
       { url: '/favicon.ico' },
