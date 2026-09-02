@@ -151,10 +151,12 @@ export async function POST(request: NextRequest) {
         // }),
       );
 
-    // Do not restrict remote UIDs: an incident room needs the bot to hear every participant.
+    // Agora requires an initial participant list when starting the session.
+    // The requester is always present; additional participant forwarding is added separately.
     const session = agent.createSession({
       channel: channel_name,
       agentUid,
+      remoteUids: [requester_id],
       idleTimeout: 30,
       expiresIn: ExpiresIn.hours(1),
       debug: false, // enable debug to show restful API calls in the console
