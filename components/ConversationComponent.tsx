@@ -39,6 +39,8 @@ import {
   type ConnectionIssue,
 } from './ConversationErrorCard';
 import { ConnectionStatusPanel } from './ConnectionStatusPanel';
+import { BotAudioVisualizer } from './BotAudioVisualizer';
+import { IncidentHistoryDrawer, saveCurrentIncident, type ArchivedIncident } from './IncidentHistoryDrawer';
 import { QuickstartConversationLayout } from './QuickstartConversationLayout';
 import {
   QuickstartPipelineMetrics,
@@ -129,6 +131,7 @@ export default function ConversationComponent({
   const [isEnabled, setIsEnabled] = useState(true);
   const [isAgentConnected, setIsAgentConnected] = useState(false);
   const [isConnectionDetailsOpen, setIsConnectionDetailsOpen] = useState(false);
+  const [isIncidentHistoryOpen, setIsIncidentHistoryOpen] = useState(false);
 
   // Tracks granular RTC connection state for the status dot.
   // Agora states: DISCONNECTED | CONNECTING | CONNECTED | DISCONNECTING | RECONNECTING
@@ -267,7 +270,7 @@ export default function ConversationComponent({
 
           try {
             // Forward completed (not IN_PROGRESS) turns to our pipeline.
-            (t || []).forEach((item: TranscriptHelperItem<any>) => {
+            (t || []).forEach((item: TranscriptHelperItem<Partial<UserTranscription | AgentTranscription>>) => {
               const status = item.status as unknown as number;
               if (status === TurnStatus.IN_PROGRESS) return;
               const id = String(item.turn_id || `${item.uid}-${item._time || Date.now()}`);
@@ -492,6 +495,7 @@ export default function ConversationComponent({
       mapAgentVisualizerState(agentState, isAgentConnected, connectionState),
     [agentState, isAgentConnected, connectionState],
   );
+  const isBotSpeaking = agentState === 'speaking';
 
   /**
    * Mute/unmute via track.setEnabled() only — usePublish owns publish state.
@@ -534,7 +538,8 @@ export default function ConversationComponent({
   }, [onEndConversation]);
 
   return (
-    <QuickstartConversationLayout
+    <>
+      <QuickstartConversationLayout
       statusPanel={
         <div className="flex items-center gap-3">
           <div className="flex flex-col text-sm">
@@ -554,6 +559,7 @@ export default function ConversationComponent({
             <span className={`inline-flex h-2 w-2 rounded-full ${isAgentConnected ? 'bg-green-500' : 'bg-gray-400'}`} />
             <span className="text-xs text-muted-foreground">{isAgentConnected ? 'Bot live' : 'Bot not present'}</span>
           </div>
+          <Button variant="outline" size="sm" onClick={() => setIsIncidentHistoryOpen(true)}>Incident History</Button>
         </div>
       }
       pipelineMetrics={<QuickstartPipelineMetrics metrics={agentMetrics} />}
@@ -566,6 +572,7 @@ export default function ConversationComponent({
       }
       visualizer={
         <div className="relative flex h-full min-h-[20rem] w-full max-w-4xl flex-col items-center justify-center" role="region" aria-label="AI agent status visualization">
+          <BotAudioVisualizer isSpeaking={isBotSpeaking} />
           <div className="mb-3 w-full flex items-center justify-center">
             <AgentVisualizer state={visualizerState} size="lg" />
           </div>
@@ -618,6 +625,20 @@ export default function ConversationComponent({
                     status: t.status,
                   }));
 
+                  const incident: ArchivedIncident = {
+                    id: `${channel}-${Date.now()}`,
+                    title: `Incident Summary - ${channel}`,
+                    timestamp: ts,
+                    severity: 'Sev-3',
+                    summary: entries.length > 0 ? entries[entries.length - 1].text : 'No transcript entries recorded.',
+                    actionItems: [],
+                    timeline: entries.map((entry) => ({
+                      time: entry.ts ? new Date(entry.ts).toISOString() : ts,
+                      note: `Speaker ${entry.speaker}: ${entry.text}`,
+                    })),
+                  };
+                  saveCurrentIncident(incident);
+
                   const mdLines: string[] = [];
                   mdLines.push(`# Incident Summary — ${channel}`);
                   mdLines.push(`
@@ -650,6 +671,9 @@ Generated: ${ts}\n`);
         </div>
       }
       onEndConversation={handleEndConversation}
-    />
+      isEnding={isStopping}
+      />
+      <IncidentHistoryDrawer isOpen={isIncidentHistoryOpen} onClose={() => setIsIncidentHistoryOpen(false)} />
+    </>
   );
 }

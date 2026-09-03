@@ -12,14 +12,14 @@ type SpeakPayload = {
 type StoredSession = {
   channel: string;
   agentId?: string;
-  // session or agent objects from the SDK; typed as any for safety
-  session?: any;
+  // Session objects are stored and passed through without SDK-specific coupling.
+  session?: unknown;
   queue: SpeakPayload[];
 };
 
 const sessions = new Map<string, StoredSession>();
 
-export function registerSession(channel: string, session: any, agentId?: string) {
+export function registerSession(channel: string, session: unknown, agentId?: string) {
   const s: StoredSession = sessions.get(channel) ?? { channel, queue: [] };
   s.session = session;
   if (agentId) s.agentId = agentId;
