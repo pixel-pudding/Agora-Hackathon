@@ -17,8 +17,8 @@ const PIPELINE = [
   { key: 'tts', label: 'MiniMax TTS', metricTypes: ['tts'] },
 ] as const;
 
-function formatMetricName(name: string) {
-  return name.replace(/[_-]+/g, ' ');
+function formatMetricName(name?: string) {
+  return (name || 'latency').replace(/[_-]+/g, ' ');
 }
 
 export function QuickstartPipelineMetrics({
