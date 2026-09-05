@@ -402,7 +402,7 @@ export function ActiveRoom({
 
   // Initialize AgoraVoiceAI once the channel is joined
   useEffect(() => {
-    if (!isReady || !joinSuccess) return;
+    if (!isReady || !joinSuccess || !rtmClient) return;
 
     let cancelled = false;
 
@@ -599,6 +599,8 @@ export function ActiveRoom({
       }
     };
 
+    if (!rtmClient) return;
+
     rtmClient.addEventListener('message', handleRtmMessage);
     return () => {
       rtmClient.removeEventListener('message', handleRtmMessage);
@@ -680,7 +682,9 @@ export function ActiveRoom({
         joinedUID.toString(),
       );
       await client?.renewToken(rtcToken);
-      await rtmClient.renewToken(rtmToken);
+      if (rtmClient) {
+        await rtmClient.renewToken(rtmToken);
+      }
     } catch (error) {
       console.error('Failed to renew Agora token:', error);
     }

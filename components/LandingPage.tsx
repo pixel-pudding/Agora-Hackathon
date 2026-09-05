@@ -264,7 +264,7 @@ export default function LandingPage() {
               onChannelNameChange={setChannelName}
               onStartConversation={handleStartConversation}
             />
-          ) : agoraData && rtmClient ? (
+          ) : (
             <>
               {/* Non-fatal invite warning: the browser session can still render even if agent start failed. */}
               {agentJoinError && (
@@ -278,7 +278,13 @@ export default function LandingPage() {
                 <ErrorBoundary>
                   <AgoraProvider>
                     <ConversationComponent
-                      agoraData={agoraData}
+                      agoraData={
+                        agoraData || {
+                          token: '',
+                          uid: '1000',
+                          channel: channelName.trim() || 'incident-123',
+                        }
+                      }
                       rtmClient={rtmClient}
                       onTokenWillExpire={handleTokenWillExpire}
                       onEndConversation={handleEndConversation}
@@ -288,11 +294,6 @@ export default function LandingPage() {
                 </ErrorBoundary>
               </Suspense>
             </>
-          ) : (
-            /* Fallback if session bootstrap partially succeeded but required state is missing. */
-            <p className="text-sm text-muted-foreground">
-              Failed to load conversation data.
-            </p>
           )}
         </div>
       </div>
