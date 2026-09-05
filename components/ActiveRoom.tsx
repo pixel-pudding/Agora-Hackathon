@@ -475,6 +475,22 @@ export function ActiveRoom({
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload),
               }).catch((e) => console.warn('forward-audio failed:', e));
+
+              // Ingest and persist every transcript turn into PostgreSQL database
+              if (item.text && typeof item.text === 'string') {
+                void fetch('/api/ai/analyze-incident', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    channelName: agoraData.channel || 'echoops-war-room',
+                    speakerName:
+                      item.uid === '0' || String(item.uid) === String(client.uid)
+                        ? 'You (Commander)'
+                        : 'EchoOps AI',
+                    transcript: item.text,
+                  }),
+                }).catch((e) => console.warn('analyze-incident failed:', e));
+              }
             });
           } catch (err) {
             console.warn('Error forwarding transcript:', err);

@@ -77,6 +77,17 @@ export function useAiSpeechHandler({ channel }: UseAiSpeechHandlerOptions) {
       let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
 
       try {
+        // Ingest user speech into PostgreSQL database & state machine
+        void fetch('/api/ai/analyze-incident', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            channelName: channel || 'echoops-war-room',
+            speakerName: 'You (Commander)',
+            transcript: normalizedTranscript,
+          }),
+        }).catch((err) => console.warn('Turn persistence note:', err));
+
         metrics.markLlmRequest();
         const respondResponse = await fetch('/api/ai/respond', {
           method: 'POST',
@@ -97,6 +108,7 @@ export function useAiSpeechHandler({ channel }: UseAiSpeechHandlerOptions) {
         const decoder = new TextDecoder();
         let buffer = '';
         let streamDone = false;
+        let completeAssistantReply = '';
 
         const handleEvent = (rawEvent: string) => {
           if (abortController.signal.aborted) return;
@@ -108,6 +120,7 @@ export function useAiSpeechHandler({ channel }: UseAiSpeechHandlerOptions) {
           if (!data) return;
           const payload = JSON.parse(data) as RespondPayload;
           if (payload.type === 'chunk' && typeof payload.text === 'string') {
+            completeAssistantReply += payload.text;
             queueSpeechChunk(payload.text);
           }
           if (payload.type === 'done') streamDone = true;
@@ -140,6 +153,20 @@ export function useAiSpeechHandler({ channel }: UseAiSpeechHandlerOptions) {
           handleEvent(buffer);
         }
         await queuedSpeech;
+
+        // Persist AI response turn into database
+        if (completeAssistantReply.trim() && !abortController.signal.aborted) {
+          void fetch('/api/ai/analyze-incident', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              channelName: channel || 'echoops-war-room',
+              speakerName: 'EchoOps AI',
+              transcript: completeAssistantReply.trim(),
+            }),
+          }).catch((err) => console.warn('AI turn persistence note:', err));
+        }
+
         if (!receivedChunk && !abortController.signal.aborted) {
           throw new Error('The SRE copilot returned no speech content.');
         }
