@@ -1,15 +1,29 @@
 import React, { useState } from 'react';
 import { UserCheck, ShieldAlert, Check, RefreshCw, AlertCircle } from 'lucide-react';
 
-export default function HumanInTheLoop({ hitlData }) {
+/**
+ * @param {{ hitlData?: any, onConfirm?: any }} props
+ */
+export default function HumanInTheLoop({ hitlData = {}, onConfirm }) {
   const [isConfirmed, setIsConfirmed] = useState(false);
   const [confirmedTime, setConfirmedTime] = useState(null);
 
-  const handleConfirm = () => {
+  const data = {
+    actionTitle: hitlData.actionTitle || 'Restart Payment Service Pods',
+    actionSub: hitlData.actionSub || 'Cluster Worker Node Reset & Redis Connection Pool Flush',
+    consequence: hitlData.consequence || 'Will safely terminate stuck connection pool and recycle worker pods. In-flight requests will be re-routed to standby queue with zero data loss.',
+    targetCluster: hitlData.targetCluster || 'prod-us-east1-payment-worker-pool-a',
+    ...hitlData,
+  };
+
+  const handleConfirm = async () => {
     const now = new Date();
     const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     setIsConfirmed(true);
     setConfirmedTime(timeString);
+    if (onConfirm) {
+      await onConfirm(data.actionId);
+    }
   };
 
   const handleReset = () => {
@@ -29,17 +43,17 @@ export default function HumanInTheLoop({ hitlData }) {
 
       <div className="hitl-body">
         <div className="hitl-action-box">
-          <h3 className="hitl-action-title">{hitlData.actionTitle}</h3>
-          <p className="hitl-action-sub">{hitlData.actionSub}</p>
+          <h3 className="hitl-action-title">{data.actionTitle}</h3>
+          <p className="hitl-action-sub">{data.actionSub}</p>
           <p className="hitl-consequence-text">
-            <strong>Impact Assessment:</strong> {hitlData.consequence}
+            <strong>Impact Assessment:</strong> {data.consequence}
           </p>
         </div>
 
         <div className="hitl-footer-action-row">
           <div className="hitl-approval-meta">
             <AlertCircle size={14} className="text-amber-500" />
-            <span>Target: <code className="font-mono text-dim">{hitlData.targetCluster}</code></span>
+            <span>Target: <code className="font-mono text-dim">{data.targetCluster}</code></span>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>

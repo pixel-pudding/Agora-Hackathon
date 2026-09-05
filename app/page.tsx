@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import LandingPage from '@/components/LandingPage';
 import Header from '@/src/components/Header';
 import ActiveIncidentCard from '@/src/components/ActiveIncidentCard';
 import IncidentTimeline from '@/src/components/IncidentTimeline';
@@ -10,270 +11,148 @@ import ActionOwnership from '@/src/components/ActionOwnership';
 import AlertsSection from '@/src/components/AlertsSection';
 import HumanInTheLoop from '@/src/components/HumanInTheLoop';
 import VoiceTranscriptStream from '@/src/components/VoiceTranscriptStream';
-import { mockIncidentData } from '@/src/data/mockData';
-import { Mic, MicOff, PhoneCall, Volume2, ShieldAlert, Sparkles, Radio, Key, CheckCircle, AlertTriangle } from 'lucide-react';
+import { useLiveIncident } from '@/hooks/useLiveIncident';
+import { Radio, LayoutDashboard, SplitSquareVertical, Activity, Sparkles } from 'lucide-react';
 
 export default function Home() {
-  const [isVoiceActive, setIsVoiceActive] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
-  const [liveIncident, setLiveIncident] = useState(mockIncidentData.incident);
-  const [liveTimeline, setLiveTimeline] = useState(mockIncidentData.timeline);
-  const [liveFacts, setLiveFacts] = useState(mockIncidentData.facts);
-  const [liveAssumptions, setLiveAssumptions] = useState(mockIncidentData.assumptions);
-  const [liveActions, setLiveActions] = useState(mockIncidentData.actions);
-  const [liveAlerts, setLiveAlerts] = useState(mockIncidentData.alerts);
-  const [liveHitl, setLiveHitl] = useState(mockIncidentData.humanInTheLoop);
-  const [voiceTranscripts, setVoiceTranscripts] = useState(mockIncidentData.voiceStreamMock);
-  const [showConfigModal, setShowConfigModal] = useState(false);
-  const [agoraAppId, setAgoraAppId] = useState('');
-  const [agoraCert, setAgoraCert] = useState('');
-  const [statusBanner, setStatusBanner] = useState<string | null>(null);
-
-  // Subscribe to real-time backend events via SSE (/api/events)
-  useEffect(() => {
-    let eventSource: EventSource | null = null;
-    try {
-      eventSource = new EventSource('/api/events?channel=echoops-war-room');
-      eventSource.onmessage = (e) => {
-        try {
-          const payload = JSON.parse(e.data);
-          if (payload.event === 'state.update' && payload.data) {
-            const inc = payload.data;
-            if (inc.title) {
-              setLiveIncident((prev: any) => ({
-                ...prev,
-                title: inc.title,
-                severity: inc.severity,
-                status: inc.status,
-              }));
-            }
-            if (inc.facts && inc.facts.length > 0) {
-              setLiveFacts(
-                inc.facts.map((f: any, i: number) => ({
-                  id: f.id || `f-${i}`,
-                  text: f.statement,
-                  time: f.timestamp ? new Date(f.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now',
-                  source: f.verifiedBy || 'EchoOps AI',
-                  verified: true,
-                })),
-              );
-            }
-            if (inc.timeline && inc.timeline.length > 0) {
-              setLiveTimeline(
-                inc.timeline.map((t: any, i: number) => ({
-                  id: t.id || `t-${i}`,
-                  time: t.time || '10:00 AM',
-                  type: t.category === 'fact' ? 'fact' : t.category === 'action' ? 'action' : 'decision',
-                  speaker: t.speaker || 'System',
-                  content: t.note,
-                })),
-              );
-            }
-          }
-        } catch {
-          // Ignore parse error
-        }
-      };
-    } catch {
-      // EventSource fallback
-    }
-
-    return () => {
-      if (eventSource) eventSource.close();
-    };
-  }, []);
-
-  const toggleVoiceSession = () => {
-    if (!isVoiceActive) {
-      setIsVoiceActive(true);
-      setStatusBanner('🟢 EchoOps Voice AI is active and monitoring audio on channel "incident-war-room".');
-      
-      // Simulate live AI voice response if browser supports speech
-      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-        try {
-          window.speechSynthesis.cancel();
-          const utterance = new SpeechSynthesisUtterance("EchoOps Incident Commander connected. I am monitoring the voice room and tracking verified incident state.");
-          utterance.rate = 1.05;
-          utterance.pitch = 1.0;
-          window.speechSynthesis.speak(utterance);
-        } catch {
-          // Speech synthesis fallback
-        }
-      }
-    } else {
-      setIsVoiceActive(false);
-      setStatusBanner(null);
-      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-      }
-    }
-  };
-
-  const handleSimulateTurn = async (text: string, speaker = 'Lead SRE') => {
-    try {
-      const res = await fetch('/api/ai/analyze-incident', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          channelName: 'echoops-war-room',
-          speakerName: speaker,
-          transcript: text,
-        }),
-      });
-      const data = await res.json();
-      if (data.incident) {
-        setLiveIncident((prev: any) => ({
-          ...prev,
-          title: data.incident.title,
-          severity: data.incident.severity,
-          status: data.incident.status,
-        }));
-      }
-
-      setVoiceTranscripts((prev: any) => [
-        {
-          id: `vt-${Date.now()}`,
-          speaker,
-          role: 'Responder',
-          time: 'Just now',
-          text,
-          verified: true,
-        },
-        ...prev,
-      ]);
-    } catch (err) {
-      console.warn('Turn analysis dispatch error:', err);
-    }
-  };
+  const [activeTab, setActiveTab] = useState<'voice' | 'dashboard' | 'split'>('voice');
+  const live = useLiveIncident('echoops-war-room');
 
   return (
-    <div className="app-layout" style={{ background: '#f8fafc', minHeight: '100vh', color: '#0f172a' }}>
-      {/* 1. HEADER with EchoOps, Voice AI Commander, and LIVE status */}
-      <Header />
-
-      {/* Voice Room Live Control Bar */}
-      <div style={{ background: 'linear-gradient(90deg, #1e1b4b 0%, #312e81 50%, #4338ca 100%)', color: '#ffffff', padding: '0.875rem 2rem', boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}>
-        <div style={{ maxWidth: '1440px', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(255,255,255,0.1)', padding: '0.35rem 0.75rem', borderRadius: '20px' }}>
-              <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: isVoiceActive ? '#22c55e' : '#94a3b8', animation: isVoiceActive ? 'pulse 1.5s infinite' : 'none' }}></div>
-              <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>
-                {isVoiceActive ? 'Voice Bridge Connected' : 'Voice Bridge Standby'}
+    <div className="min-h-screen flex flex-col bg-[#0b0f19] text-white">
+      {/* Navigation View Switcher */}
+      <div className="bg-[#0f172a] border-b border-slate-800 px-6 py-2.5 flex items-center justify-between z-50">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center font-bold text-white shadow-lg shadow-indigo-500/30">
+            EO
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-slate-100 text-sm tracking-wide">EchoOps</span>
+              <span className="text-[10px] bg-indigo-500/20 text-indigo-300 font-mono px-2 py-0.5 rounded border border-indigo-500/30">
+                WAR ROOM #042
+              </span>
+              <span
+                className={`flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded ${
+                  live.isConnected
+                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                    : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                }`}
+                title={live.isConnected ? 'Live Real-time SSE Stream Connected' : 'Connecting to real-time events...'}
+              >
+                <span
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    live.isConnected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'
+                  }`}
+                ></span>
+                {live.isConnected ? 'LIVE SYNC' : 'CONNECTING'}
               </span>
             </div>
-            <span style={{ fontSize: '0.875rem', color: '#c7d2fe' }}>
-              Room: <strong style={{ color: '#fff' }}>incident-war-room</strong> • Agora Voice AI: <strong style={{ color: '#86efac' }}>EchoOps</strong>
-            </span>
+            <p className="text-xs text-slate-400">Voice AI Incident Commander</p>
           </div>
+        </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            {isVoiceActive && (
-              <button
-                onClick={() => setIsMuted(!isMuted)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.35rem',
-                  background: isMuted ? '#ef4444' : 'rgba(255,255,255,0.15)',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: '6px',
-                  padding: '0.45rem 0.75rem',
-                  fontSize: '0.8rem',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                }}
-              >
-                {isMuted ? <MicOff size={14} /> : <Mic size={14} />}
-                {isMuted ? 'Muted' : 'Mute Mic'}
-              </button>
-            )}
-
-            <button
-              onClick={toggleVoiceSession}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.5rem',
-                background: isVoiceActive ? '#ef4444' : '#4f46e5',
-                color: '#fff',
-                border: 'none',
-                borderRadius: '6px',
-                padding: '0.5rem 1.25rem',
-                fontSize: '0.875rem',
-                fontWeight: 600,
-                cursor: 'pointer',
-                boxShadow: isVoiceActive ? '0 0 15px rgba(239, 68, 68, 0.4)' : '0 0 15px rgba(79, 70, 229, 0.4)',
-                transition: 'all 0.2s',
-              }}
-            >
-              {isVoiceActive ? <PhoneCall size={16} /> : <Mic size={16} />}
-              {isVoiceActive ? 'Leave Voice Room' : 'Join Voice Room'}
-            </button>
-
-            <button
-              onClick={() => handleSimulateTurn('Confirmed water level reached 2.3 meters near Sector 7 drainage.')}
-              style={{
-                background: 'rgba(255,255,255,0.1)',
-                color: '#fff',
-                border: '1px solid rgba(255,255,255,0.2)',
-                borderRadius: '6px',
-                padding: '0.5rem 0.85rem',
-                fontSize: '0.8rem',
-                fontWeight: 500,
-                cursor: 'pointer',
-              }}
-              title="Simulate speech from responders into EchoOps"
-            >
-              <Sparkles size={14} style={{ display: 'inline', marginRight: '4px' }} />
-              Test Speech Ingestion
-            </button>
-          </div>
+        {/* View Switcher Tabs */}
+        <div className="flex items-center bg-slate-900/90 p-1 rounded-xl border border-slate-800">
+          <button
+            onClick={() => setActiveTab('voice')}
+            className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              activeTab === 'voice'
+                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Radio size={14} />
+            Active Voice Room
+          </button>
+          <button
+            onClick={() => setActiveTab('dashboard')}
+            className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              activeTab === 'dashboard'
+                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <LayoutDashboard size={14} />
+            Incident Dashboard
+          </button>
+          <button
+            onClick={() => setActiveTab('split')}
+            className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              activeTab === 'split'
+                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <SplitSquareVertical size={14} />
+            Split View
+          </button>
         </div>
       </div>
 
-      {statusBanner && (
-        <div style={{ background: '#ecfdf5', borderBottom: '1px solid #a7f3d0', padding: '0.5rem 2rem', color: '#065f46', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <CheckCircle size={16} />
-          <span>{statusBanner}</span>
-        </div>
-      )}
-
-      {/* Main Dashboard Container */}
-      <main className="dashboard-container">
-        {/* 2. ACTIVE INCIDENT HERO: Payment Service Outage, HIGH severity, ACTIVE status */}
-        <ActiveIncidentCard incident={liveIncident} />
-
-        {/* 2-Column Responsive Dashboard Layout */}
-        <div className="dashboard-grid">
-          {/* Left Column: Investigation, Timeline & Actions */}
-          <div className="grid-col">
-            {/* 3. INCIDENT TIMELINE: Chronological events with timestamps */}
-            <IncidentTimeline timeline={liveTimeline} />
-
-            {/* 6. ACTION & OWNERSHIP: PENDING, IN PROGRESS, COMPLETED */}
-            <ActionOwnership initialActions={liveActions} />
-
-            {/* 8. HUMAN-IN-THE-LOOP: Critical action requiring approval */}
-            <HumanInTheLoop hitlData={liveHitl} />
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col">
+        {activeTab === 'voice' && (
+          <div className="flex-1 w-full bg-[#121212]">
+            <LandingPage />
           </div>
+        )}
 
-          {/* Right Column: Intelligence, Alerts, Facts & Assumptions */}
-          <div className="grid-col">
-            {/* 7. ALERTS: Separate Conflict, Gap, and Risk alerts */}
-            <AlertsSection alerts={liveAlerts} />
-
-            {/* 4. FACTS: Confirmed information */}
-            <FactsCard facts={liveFacts} />
-
-            {/* 5. ASSUMPTIONS: Unconfirmed information clearly labeled */}
-            <AssumptionsCard assumptions={liveAssumptions} />
-
-            {/* VOICE AI REAL-TIME SYNTHESIS STREAM */}
-            <VoiceTranscriptStream transcripts={voiceTranscripts} />
+        {activeTab === 'dashboard' && (
+          <div className="flex-1 w-full bg-slate-50 text-slate-900 overflow-y-auto">
+            <Header />
+            <main className="dashboard-container">
+              <ActiveIncidentCard incident={live.incidentHero} />
+              <div className="dashboard-grid">
+                <div className="grid-col">
+                  <IncidentTimeline timeline={live.timeline} />
+                  <ActionOwnership
+                    actions={live.actions}
+                    onStatusChange={live.updateActionStatus}
+                  />
+                  <HumanInTheLoop
+                    hitlData={live.humanInTheLoop}
+                    onConfirm={live.confirmHitlAction}
+                  />
+                </div>
+                <div className="grid-col">
+                  <AlertsSection alerts={live.alerts} />
+                  <FactsCard facts={live.facts} />
+                  <AssumptionsCard assumptions={live.assumptions} />
+                  <VoiceTranscriptStream transcripts={live.voiceStream} />
+                </div>
+              </div>
+            </main>
           </div>
-        </div>
-      </main>
+        )}
+
+        {activeTab === 'split' && (
+          <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-slate-800">
+            <div className="h-full overflow-y-auto bg-[#121212]">
+              <LandingPage />
+            </div>
+            <div className="h-full overflow-y-auto bg-slate-50 text-slate-900">
+              <main className="dashboard-container py-4">
+                <ActiveIncidentCard incident={live.incidentHero} />
+                <div className="space-y-4">
+                  <FactsCard facts={live.facts} />
+                  <AssumptionsCard assumptions={live.assumptions} />
+                  <ActionOwnership
+                    actions={live.actions}
+                    onStatusChange={live.updateActionStatus}
+                  />
+                  <HumanInTheLoop
+                    hitlData={live.humanInTheLoop}
+                    onConfirm={live.confirmHitlAction}
+                  />
+                  <IncidentTimeline timeline={live.timeline} />
+                  <VoiceTranscriptStream transcripts={live.voiceStream} />
+                </div>
+              </main>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -1,7 +1,31 @@
 import React from 'react';
 import { AlertTriangle, GitFork, UserX, TrendingDown, ShieldAlert } from 'lucide-react';
 
-export default function AlertsSection({ alerts }) {
+/**
+ * @param {{ alerts?: any }} props
+ */
+export default function AlertsSection({ alerts = {} }) {
+  const conflict = alerts?.conflict || {
+    time: 'Live',
+    title: 'No Active Conflicts',
+    description: 'All responders are aligned on current operational priorities.',
+    impact: 'None detected.',
+  };
+
+  const gap = alerts?.gap || {
+    time: 'Live',
+    title: 'Telemetry Gaps Monitored',
+    description: 'System actively tracking missing logs, metrics, and responder availability.',
+    impact: 'Low.',
+  };
+
+  const risk = alerts?.risk || {
+    time: 'Active',
+    title: 'SLA Threshold Tracking',
+    description: 'EchoOps AI monitoring uptime thresholds and automated alert escalations.',
+    impact: 'Continuous risk assessment.',
+  };
+
   return (
     <div className="card" aria-label="Incident Alerts">
       <div className="card-header">
@@ -40,13 +64,13 @@ export default function AlertsSection({ alerts }) {
             <div className="alert-content-col">
               <div className="alert-top-row">
                 <span className="alert-category-tag tag-conflict">Conflict Alert</span>
-                <span className="font-mono text-dim" style={{ fontSize: '0.72rem' }}>{alerts.conflict.time}</span>
+                <span className="font-mono text-dim" style={{ fontSize: '0.72rem' }}>{conflict.time}</span>
               </div>
-              <h3 className="alert-heading">{alerts.conflict.title}</h3>
-              <p className="alert-description">{alerts.conflict.description}</p>
+              <h3 className="alert-heading">{conflict.title}</h3>
+              <p className="alert-description">{conflict.description}</p>
               <div className="alert-impact-box">
                 <span style={{ color: '#991b1b', fontWeight: '700' }}>Impact: </span>
-                {alerts.conflict.impact}
+                {conflict.impact}
               </div>
             </div>
           </div>
@@ -73,13 +97,13 @@ export default function AlertsSection({ alerts }) {
             <div className="alert-content-col">
               <div className="alert-top-row">
                 <span className="alert-category-tag tag-gap">Gap Alert</span>
-                <span className="font-mono text-dim" style={{ fontSize: '0.72rem' }}>{alerts.gap.time}</span>
+                <span className="font-mono text-dim" style={{ fontSize: '0.72rem' }}>{gap.time}</span>
               </div>
-              <h3 className="alert-heading">{alerts.gap.title}</h3>
-              <p className="alert-description">{alerts.gap.description}</p>
+              <h3 className="alert-heading">{gap.title}</h3>
+              <p className="alert-description">{gap.description}</p>
               <div className="alert-impact-box">
                 <span style={{ color: '#9a3412', fontWeight: '700' }}>Impact: </span>
-                {alerts.gap.impact}
+                {gap.impact}
               </div>
             </div>
           </div>
@@ -106,13 +130,13 @@ export default function AlertsSection({ alerts }) {
             <div className="alert-content-col">
               <div className="alert-top-row">
                 <span className="alert-category-tag tag-risk">Risk Alert</span>
-                <span className="font-mono text-dim" style={{ fontSize: '0.72rem' }}>{alerts.risk.time}</span>
+                <span className="font-mono text-dim" style={{ fontSize: '0.72rem' }}>{risk.time}</span>
               </div>
-              <h3 className="alert-heading">{alerts.risk.title}</h3>
-              <p className="alert-description">{alerts.risk.description}</p>
+              <h3 className="alert-heading">{risk.title}</h3>
+              <p className="alert-description">{risk.description}</p>
               <div className="alert-impact-box">
                 <span style={{ color: '#5b21b6', fontWeight: '700' }}>Impact: </span>
-                {alerts.risk.impact}
+                {risk.impact}
               </div>
             </div>
           </div>

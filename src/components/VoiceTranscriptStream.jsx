@@ -1,7 +1,12 @@
 import React from 'react';
 import { Mic, Radio, Volume2 } from 'lucide-react';
 
-export default function VoiceTranscriptStream({ transcripts }) {
+/**
+ * @param {{ transcripts?: any }} props
+ */
+export default function VoiceTranscriptStream({ transcripts = [] }) {
+  const safeTranscripts = Array.isArray(transcripts) ? transcripts : [];
+
   return (
     <div className="card" aria-label="Voice AI Live Audio Stream">
       <div className="card-header">
@@ -18,15 +23,19 @@ export default function VoiceTranscriptStream({ transcripts }) {
 
       <div className="card-body" style={{ padding: '0.85rem 1.15rem' }}>
         <div className="voice-transcript-card">
-          {transcripts.map((t, idx) => (
-            <div key={idx} className="voice-stream-item">
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.15rem' }}>
-                <span className="voice-speaker-badge">{t.speaker}</span>
-                <span className="font-mono text-dim" style={{ fontSize: '0.68rem' }}>{t.time}</span>
+          {safeTranscripts.length === 0 ? (
+            <p className="text-xs text-slate-400 italic py-2">Listening to live voice bridge for responder audio...</p>
+          ) : (
+            safeTranscripts.map((t, idx) => (
+              <div key={idx} className="voice-stream-item">
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.15rem' }}>
+                  <span className="voice-speaker-badge">{t.speaker || 'Responder'}</span>
+                  <span className="font-mono text-dim" style={{ fontSize: '0.68rem' }}>{t.time || 'Live'}</span>
+                </div>
+                <p style={{ color: '#334155', fontSize: '0.825rem' }}>"{t.text}"</p>
               </div>
-              <p style={{ color: '#334155', fontSize: '0.825rem' }}>"{t.text}"</p>
-            </div>
-          ))}
+            ))
+          )}
         </div>
       </div>
     </div>

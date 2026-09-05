@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { processConversationTurn } from '@/lib/echoOpsEngine';
 import { getOrCreateIncident } from '@/lib/incidentStore';
+import { persistIncidentToDb } from '@/lib/db/models';
+import { wsHub } from '@/lib/wsHub';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,6 +28,28 @@ export async function POST(req: NextRequest) {
       channelName,
       speakerName,
       transcript,
+    );
+
+    // 1. Broadcast real-time SSE state update to all dashboard and voice clients
+    wsHub.broadcastStateUpdate(incident);
+
+    if (analysis.actionsExtracted.length > 0) {
+      const firstAction = incident.actionItems[0];
+      if (firstAction) {
+        wsHub.broadcastActionAssigned(firstAction, incident.title);
+      }
+    }
+
+    if (analysis.conflictsDetected.length > 0) {
+      const firstConflict = incident.conflicts[0];
+      if (firstConflict) {
+        wsHub.broadcastConflictRaised(firstConflict);
+      }
+    }
+
+    // 2. Persist turn and updated incident graph to PostgreSQL (with memory fallback)
+    persistIncidentToDb(incident).catch((err) =>
+      console.warn('PostgreSQL persistence note:', err),
     );
 
     return NextResponse.json({

@@ -45,12 +45,12 @@ export function analyzeTranscriptSnippet(
 
   const lower = text.toLowerCase();
 
-  // 1. Fact Detection (Contains concrete metrics, verified statuses, measurements)
+  // 1. Fact Detection (Contains concrete metrics, verified statuses, measurements, telemetry)
   const isFactPattern =
-    /(?:confirmed|verified|logs show|telemetry shows|is now|reached|measured at|error rate is|status is|down at|blocked at)\b/i.test(
+    /(?:confirmed|verified|logs show|telemetry shows|is now|reached|measured at|error rate is|status is|down at|blocked at|observed|spike|traffic dropped|failing|latenc|p99|p95|504|502|500|429|memory|cpu|saturation|replicas|timeout|pod|database connection)\b/i.test(
       lower,
     ) ||
-    /\b\d+(?:\.\d+)?(?:%|ms|s|m|meters|req\/s|rps|replicas|errors)\b/i.test(lower);
+    /\b\d+(?:\.\d+)?(?:%|ms|s|m|meters|req\/s|rps|replicas|errors|connections|pods|nodes|instances)\b/i.test(lower);
 
   if (isFactPattern) {
     result.factsExtracted.push({
@@ -61,9 +61,9 @@ export function analyzeTranscriptSnippet(
     });
   }
 
-  // 2. Hypothesis / Assumption Detection (Contains speculation words)
+  // 2. Hypothesis / Assumption Detection (Contains speculation words, theories, root cause thoughts)
   const isHypothesisPattern =
-    /(?:maybe|could be|suspect|assuming|probably|might be|i think|guess|seems like|assumption)\b/i.test(
+    /(?:maybe|could be|suspect|assuming|probably|might be|i think|guess|seems like|assumption|hypothesis|looks like|possible cause|potential root cause|root cause is likely|could have caused|could trigger)\b/i.test(
       lower,
     );
 
@@ -77,23 +77,24 @@ export function analyzeTranscriptSnippet(
 
   // 3. Action Item / Task Ownership Assignment
   const actionMatch = lower.match(
-    /(?:need to|action item|task:|assign|let me|please|will|i will|you take|take over)\s+(.+)/i,
+    /(?:need to|action item|task:|assign|let me|please|will|i will|i'll|you take|take over|let's|restarting|rolling back|draining|scaling|investigate|check|flush|kill|dispatch)\s+(.+)/i,
   );
-  if (actionMatch) {
+  if (actionMatch || /(?:rollback|drain|restart|cutover|shift traffic|evacuate|flush pool|scale up|kill query)/i.test(lower)) {
     // Attempt to infer owner from speech
     let owner = speakerName;
     if (/let me|i will|i'll/i.test(lower)) {
       owner = speakerName;
-    } else if (/@?([a-zA-Z]+)\s+(?:please|take|check|verify|run)/i.test(text)) {
-      const match = text.match(/@?([a-zA-Z]+)\s+(?:please|take|check|verify|run)/i);
+    } else if (/@?([a-zA-Z]+)\s+(?:please|take|check|verify|run|drain|flush|restart)/i.test(text)) {
+      const match = text.match(/@?([a-zA-Z]+)\s+(?:please|take|check|verify|run|drain|flush|restart)/i);
       if (match) owner = match[1];
     }
 
+    const isCritical = /(?:rollback|drain|restart|cutover|shift traffic|evacuate|drop|kill|flush)/i.test(lower);
     result.actionsExtracted.push({
       task: text.replace(/^(task:|action item:|action:)\s*/i, ''),
       owner,
       status: 'in_progress',
-      requiresConfirmation: /(?:rollback|drain|restart|cutover|shift traffic|evacuate)/i.test(lower),
+      requiresConfirmation: isCritical,
     });
   }
 
@@ -101,25 +102,26 @@ export function analyzeTranscriptSnippet(
   // Check against existing facts/hypotheses in current incident
   for (const existingFact of incident.facts) {
     const efLower = existingFact.statement.toLowerCase();
-    // Example: blocked vs open/clear
     if (
       (lower.includes('blocked') && efLower.includes('clear')) ||
       (lower.includes('clear') && efLower.includes('blocked')) ||
-      (lower.includes('healthy') && efLower.includes('outage'))
+      (lower.includes('healthy') && (efLower.includes('outage') || efLower.includes('down') || efLower.includes('failing'))) ||
+      ((lower.includes('down') || lower.includes('failing')) && efLower.includes('healthy')) ||
+      (lower.includes('deploy') && efLower.includes('rollback'))
     ) {
       result.conflictsDetected.push({
-        description: `Contradiction detected on status: "${text}" vs existing verified fact "${existingFact.statement}"`,
+        description: `Contradiction detected: "${text}" conflicts with established fact "${existingFact.statement}"`,
         partiesInvolved: [existingFact.verifiedBy, speakerName],
         conflictingStatements: [existingFact.statement, text],
         status: 'open',
       });
       result.shouldSpeak = true;
-      result.spokenSummaryPrompt = `Attention team: I detected a conflict between ${existingFact.verifiedBy}'s report and ${speakerName}'s update. Let's verify this fact before acting.`;
+      result.spokenSummaryPrompt = `Attention team: I detected a conflict between established facts and ${speakerName}'s update. Let's verify this before taking irreversible action.`;
     }
   }
 
   // 5. Missing Info Gap Identification
-  if (/(?:unknown|not sure|no idea|missing|unconfirmed|haven't checked)\b/i.test(lower)) {
+  if (/(?:unknown|not sure|no idea|missing|unconfirmed|haven't checked|who is on-call|do we know|unclear)\b/i.test(lower)) {
     result.gapsIdentified.push({
       question: `Clarification needed on: "${text}"`,
       impactLevel: 'medium',

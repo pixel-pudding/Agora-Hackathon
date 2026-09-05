@@ -1,7 +1,12 @@
 import React from 'react';
 import { Clock, AlertTriangle, XCircle, Sparkles, ShieldX, CheckCircle2 } from 'lucide-react';
 
-export default function IncidentTimeline({ timeline }) {
+/**
+ * @param {{ timeline?: any }} props
+ */
+export default function IncidentTimeline({ timeline = [] }) {
+  const safeTimeline = Array.isArray(timeline) ? timeline : [];
+
   const getNodeIcon = (type) => {
     switch (type) {
       case 'alert':
@@ -11,6 +16,7 @@ export default function IncidentTimeline({ timeline }) {
       case 'system':
         return <Sparkles size={16} />;
       case 'warning':
+      case 'conflict':
         return <ShieldX size={16} />;
       case 'action':
         return <CheckCircle2 size={16} />;
@@ -28,38 +34,42 @@ export default function IncidentTimeline({ timeline }) {
           </div>
           <h2 className="card-title">Incident Timeline</h2>
         </div>
-        <span className="card-badge-count">{timeline.length} Chronological Events</span>
+        <span className="card-badge-count">{safeTimeline.length} Events</span>
       </div>
 
       <div className="card-body">
-        <div className="timeline-container">
-          <div className="timeline-track">
-            {timeline.map((item) => (
-              <div key={item.id} className="timeline-item">
-                {/* Node icon with type-specific color */}
-                <div className={`timeline-node ${item.type}`} title={item.type}>
-                  {getNodeIcon(item.type)}
-                </div>
-
-                {/* Event Content Card */}
-                <div className="timeline-content-card">
-                  <div className="timeline-meta-row">
-                    <span className="timeline-time-badge">{item.time}</span>
-                    <span className="timeline-tag">{item.badge}</span>
+        {safeTimeline.length === 0 ? (
+          <p className="text-xs text-slate-400 italic py-2">Listening for incident timeline events...</p>
+        ) : (
+          <div className="timeline-container">
+            <div className="timeline-track">
+              {safeTimeline.map((item, idx) => (
+                <div key={item.id || `tl-${idx}`} className="timeline-item">
+                  {/* Node icon with type-specific color */}
+                  <div className={`timeline-node ${item.type || 'system'}`} title={item.type || 'event'}>
+                    {getNodeIcon(item.type)}
                   </div>
 
-                  <h3 className="timeline-event-title">{item.title}</h3>
-                  <p className="timeline-event-desc">{item.description}</p>
+                  {/* Event Content Card */}
+                  <div className="timeline-content-card">
+                    <div className="timeline-meta-row">
+                      <span className="timeline-time-badge">{item.time || 'Live'}</span>
+                      <span className="timeline-tag">{item.badge || 'EVENT'}</span>
+                    </div>
 
-                  <div className="timeline-source-pill">
-                    <span>Source:</span>
-                    <strong style={{ color: '#334155' }}>{item.source}</strong>
+                    <h3 className="timeline-event-title">{item.title || item.note}</h3>
+                    <p className="timeline-event-desc">{item.description || item.note}</p>
+
+                    <div className="timeline-source-pill">
+                      <span>Source:</span>
+                      <strong style={{ color: '#334155' }}>{item.source || item.speaker || 'System'}</strong>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
