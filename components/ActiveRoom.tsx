@@ -431,7 +431,7 @@ export function ActiveRoom({
               ai.unsubscribe();
               ai.destroy();
             }
-          } catch {}
+          } catch { }
           return;
         }
 
@@ -459,7 +459,7 @@ export function ActiveRoom({
                 isFinal: latestLocalTurn.status !== TurnStatus.IN_PROGRESS,
                 id: String(
                   latestLocalTurn.turn_id ||
-                    `${latestLocalTurn.uid}-${latestLocalTurn._time || 'current'}`,
+                  `${latestLocalTurn.uid}-${latestLocalTurn._time || 'current'}`,
                 ),
               });
             }
@@ -572,7 +572,7 @@ export function ActiveRoom({
           ai.unsubscribe();
           ai.destroy();
         }
-      } catch {}
+      } catch { }
     };
   }, [isReady, joinSuccess, client, rtmClient, agoraData.channel, addConnectionIssue]);
 
@@ -685,10 +685,10 @@ export function ActiveRoom({
     : isCopilotProcessing
       ? 'talking'
       : isBotSpeaking
-      ? 'talking'
-      : isMicListening || isEnabled
-      ? 'listening'
-      : mapAgentVisualizerState(agentState, isAgentConnected, connectionState);
+        ? 'talking'
+        : isMicListening || isEnabled
+          ? 'listening'
+          : mapAgentVisualizerState(agentState, isAgentConnected, connectionState);
 
   const handleMicToggle = useCallback(async () => {
     const next = !isEnabled;
@@ -750,11 +750,10 @@ export function ActiveRoom({
             </div>
             <div className="flex items-center gap-1.5 ml-2">
               <span
-                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium ${
-                  isVadActive
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium ${isVadActive
                     ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
                     : 'bg-muted/50 text-muted-foreground border border-border/40'
-                }`}
+                  }`}
               >
                 <span className={`h-1.5 w-1.5 rounded-full ${isVadActive ? 'bg-emerald-400 animate-pulse' : 'bg-muted-foreground/50'}`} />
                 {isVadActive ? 'VAD Active' : 'VAD Standby'}
@@ -823,14 +822,14 @@ export function ActiveRoom({
                   <span className={`w-2.5 h-2.5 rounded-full ${isRecording ? 'bg-red-500 animate-ping' : isBotSpeaking ? 'bg-amber-400' : isMicListening ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`}></span>
                   <span className={isRecording ? 'text-red-400 font-bold' : isBotSpeaking ? 'text-amber-300' : isMicListening ? 'text-emerald-300' : 'text-slate-400'}>
                     {isRecording
-                      ? '🔴 Recording Speech... Click again to send'
+                      ? '🔴 Recording Speech... Click again to stop & process'
                       : isBotSpeaking
-                      ? 'EchoOps AI Speaking...'
-                      : interimTranscript
-                      ? 'Transcribing your speech:'
-                      : isMicListening
-                      ? 'Listening... (Speak your update, hypothesis, or runbook command)'
-                      : 'Microphone inactive'}
+                        ? 'EchoOps AI Speaking...'
+                        : interimTranscript
+                          ? 'Transcribing your speech:'
+                          : isMicListening
+                            ? 'Listening... (Speak your update, hypothesis, or runbook command)'
+                            : 'Microphone inactive'}
                   </span>
                 </div>
                 <button
@@ -874,7 +873,7 @@ export function ActiveRoom({
                   type="button"
                   onClick={() => processUserSpeech('I think the database connection pool is saturated in payments-core-api.')}
                   disabled={isCopilotProcessing}
-                  className="text-[10px] px-2 py-0.5 rounded bg-slate-800 hover:bg-indigo-900/60 text-indigo-300 border border-slate-700 hover:border-indigo-500/50 transition-all"
+                  className="text-[10px] px-2 py-0.5 rounded bg-slate-800 hover:bg-indigo-900/60 text-indigo-300 border border-slate-700 hover:border-indigo-500/50 transition-all cursor-pointer"
                 >
                   💡 "Hypothesis: DB pool full"
                 </button>
@@ -882,7 +881,7 @@ export function ActiveRoom({
                   type="button"
                   onClick={() => processUserSpeech('Confirmed HTTP 504 error rate is at 14.2% on /checkout route.')}
                   disabled={isCopilotProcessing}
-                  className="text-[10px] px-2 py-0.5 rounded bg-slate-800 hover:bg-emerald-900/60 text-emerald-300 border border-slate-700 hover:border-emerald-500/50 transition-all"
+                  className="text-[10px] px-2 py-0.5 rounded bg-slate-800 hover:bg-emerald-900/60 text-emerald-300 border border-slate-700 hover:border-emerald-500/50 transition-all cursor-pointer"
                 >
                   📊 "Fact: 504s at 14.2%"
                 </button>
@@ -890,7 +889,7 @@ export function ActiveRoom({
                   type="button"
                   onClick={() => processUserSpeech('Alex, please drain ingress traffic to standby cluster.')}
                   disabled={isCopilotProcessing}
-                  className="text-[10px] px-2 py-0.5 rounded bg-slate-800 hover:bg-blue-900/60 text-blue-300 border border-slate-700 hover:border-blue-500/50 transition-all"
+                  className="text-[10px] px-2 py-0.5 rounded bg-slate-800 hover:bg-blue-900/60 text-blue-300 border border-slate-700 hover:border-blue-500/50 transition-all cursor-pointer"
                 >
                   ⚡ "Action: Drain traffic"
                 </button>
