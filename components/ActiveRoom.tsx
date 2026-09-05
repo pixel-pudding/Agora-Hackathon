@@ -292,10 +292,12 @@ export function ActiveRoom({
   // Hook handles transcript accumulation and continuous speech recognition
   const {
     isListening: isMicListening,
+    isRecording,
     interimTranscript,
     micLevel,
     hasMicPermission,
     startRecognition,
+    toggleListening,
     flushTranscript,
   } = useSpeechCapture({
     isMicActive: isReady && isEnabled,
@@ -818,9 +820,11 @@ export function ActiveRoom({
             <div className="w-full max-w-xl mx-auto my-2 px-4 py-2.5 rounded-xl border border-indigo-500/30 bg-slate-900/90 shadow-lg shadow-indigo-500/10 flex flex-col items-center gap-2 transition-all">
               <div className="w-full flex items-center justify-between text-xs font-semibold">
                 <div className="flex items-center gap-2">
-                  <span className={`w-2.5 h-2.5 rounded-full ${isBotSpeaking ? 'bg-amber-400' : isMicListening ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`}></span>
-                  <span className={isBotSpeaking ? 'text-amber-300' : isMicListening ? 'text-emerald-300' : 'text-slate-400'}>
-                    {isBotSpeaking
+                  <span className={`w-2.5 h-2.5 rounded-full ${isRecording ? 'bg-red-500 animate-ping' : isBotSpeaking ? 'bg-amber-400' : isMicListening ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`}></span>
+                  <span className={isRecording ? 'text-red-400 font-bold' : isBotSpeaking ? 'text-amber-300' : isMicListening ? 'text-emerald-300' : 'text-slate-400'}>
+                    {isRecording
+                      ? '🔴 Recording Speech... Click again to send'
+                      : isBotSpeaking
                       ? 'EchoOps AI Speaking...'
                       : interimTranscript
                       ? 'Transcribing your speech:'
@@ -831,11 +835,15 @@ export function ActiveRoom({
                 </div>
                 <button
                   type="button"
-                  onClick={() => startRecognition()}
-                  className="text-[11px] px-2 py-0.5 rounded bg-indigo-600/40 hover:bg-indigo-600 text-indigo-200 border border-indigo-500/40 transition-all cursor-pointer"
-                  title="Click to force-activate speech recognition"
+                  onClick={() => toggleListening()}
+                  className={`text-[11px] font-semibold px-2.5 py-1 rounded transition-all cursor-pointer ${
+                    isRecording
+                      ? 'bg-red-600 hover:bg-red-500 text-white animate-pulse'
+                      : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm'
+                  }`}
+                  title="Click to start/stop speaking"
                 >
-                  🎙️ Tap to Speak
+                  {isRecording ? '⏹️ Stop & Send' : '🎙️ Tap to Speak'}
                 </button>
               </div>
 
@@ -858,6 +866,35 @@ export function ActiveRoom({
                   "{interimTranscript}"
                 </div>
               )}
+
+              {/* One-Click Spoken Turn Prompts */}
+              <div className="w-full pt-1.5 border-t border-slate-800/80 flex flex-wrap items-center gap-1.5">
+                <span className="text-[10px] text-slate-400 font-medium">Quick Spoken Turns:</span>
+                <button
+                  type="button"
+                  onClick={() => processUserSpeech('I think the database connection pool is saturated in payments-core-api.')}
+                  disabled={isCopilotProcessing}
+                  className="text-[10px] px-2 py-0.5 rounded bg-slate-800 hover:bg-indigo-900/60 text-indigo-300 border border-slate-700 hover:border-indigo-500/50 transition-all"
+                >
+                  💡 "Hypothesis: DB pool full"
+                </button>
+                <button
+                  type="button"
+                  onClick={() => processUserSpeech('Confirmed HTTP 504 error rate is at 14.2% on /checkout route.')}
+                  disabled={isCopilotProcessing}
+                  className="text-[10px] px-2 py-0.5 rounded bg-slate-800 hover:bg-emerald-900/60 text-emerald-300 border border-slate-700 hover:border-emerald-500/50 transition-all"
+                >
+                  📊 "Fact: 504s at 14.2%"
+                </button>
+                <button
+                  type="button"
+                  onClick={() => processUserSpeech('Alex, please drain ingress traffic to standby cluster.')}
+                  disabled={isCopilotProcessing}
+                  className="text-[10px] px-2 py-0.5 rounded bg-slate-800 hover:bg-blue-900/60 text-blue-300 border border-slate-700 hover:border-blue-500/50 transition-all"
+                >
+                  ⚡ "Action: Drain traffic"
+                </button>
+              </div>
             </div>
 
             {/* Emergency / Dispatcher Speech Input Form */}

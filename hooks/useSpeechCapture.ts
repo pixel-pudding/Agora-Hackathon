@@ -70,6 +70,7 @@ export function useSpeechCapture({
   onUtteranceComplete,
 }: UseSpeechCaptureOptions) {
   const [isListening, setIsListening] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
   const [interimTranscript, setInterimTranscript] = useState('');
   const [finalTranscript, setFinalTranscript] = useState('');
   const [micLevel, setMicLevel] = useState(0);
@@ -78,6 +79,8 @@ export function useSpeechCapture({
 
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
   const audioContextRef = useRef<AudioContext | null>(null);
   const pauseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingTranscriptRef = useRef('');
@@ -158,7 +161,7 @@ export function useSpeechCapture({
         };
         animFrame = requestAnimationFrame(checkVolume);
       } catch (err) {
-        console.warn('Microphone permission or audio analyzer notice:', err);
+        console.warn('Microphone permission notice:', err);
         if (isMounted) setHasMicPermission(false);
       }
     }
@@ -262,6 +265,63 @@ export function useSpeechCapture({
     }
   }, [flushTranscript, isMicActive, language]);
 
+  // Audio Recorder for server-side Whisper fallback
+  const startRecordingAudio = useCallback(() => {
+    if (!mediaStreamRef.current) return;
+    try {
+      audioChunksRef.current = [];
+      const recorder = new MediaRecorder(mediaStreamRef.current);
+      recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) {
+          audioChunksRef.current.push(e.data);
+        }
+      };
+      recorder.onstop = async () => {
+        setIsRecording(false);
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        if (audioBlob.size > 1000) {
+          const formData = new FormData();
+          formData.append('audio', audioBlob, 'speech.webm');
+          try {
+            const res = await fetch('/api/ai/transcribe', {
+              method: 'POST',
+              body: formData,
+            });
+            if (res.ok) {
+              const data = (await res.json()) as { text?: string };
+              if (data.text?.trim()) {
+                callbackRef.current(data.text.trim());
+              }
+            }
+          } catch (err) {
+            console.warn('Audio transcription note:', err);
+          }
+        }
+      };
+      recorder.start(100);
+      mediaRecorderRef.current = recorder;
+      setIsRecording(true);
+    } catch (err) {
+      console.warn('MediaRecorder start notice:', err);
+    }
+  }, []);
+
+  const stopRecordingAudio = useCallback(() => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      mediaRecorderRef.current.stop();
+    }
+  }, []);
+
+  // Toggle speech / recording mode on user click
+  const toggleListening = useCallback(() => {
+    if (isRecording) {
+      stopRecordingAudio();
+    } else {
+      startRecognition();
+      startRecordingAudio();
+    }
+  }, [isRecording, startRecognition, startRecordingAudio, stopRecordingAudio]);
+
   useEffect(() => {
     if (isMicActive && !isBotSpeaking) {
       startRecognition();
@@ -291,6 +351,7 @@ export function useSpeechCapture({
 
   return {
     isListening,
+    isRecording,
     interimTranscript,
     finalTranscript,
     micLevel,
@@ -298,5 +359,8 @@ export function useSpeechCapture({
     isSupported,
     flushTranscript,
     startRecognition,
+    startRecordingAudio,
+    stopRecordingAudio,
+    toggleListening,
   };
 }
