@@ -293,8 +293,10 @@ export function ActiveRoom({
   const {
     isListening: isMicListening,
     interimTranscript,
+    micLevel,
+    hasMicPermission,
+    startRecognition,
     flushTranscript,
-    isSupported: isSpeechSupported,
   } = useSpeechCapture({
     isMicActive: isReady && isEnabled,
     isVadActive: true,
@@ -680,6 +682,10 @@ export function ActiveRoom({
     ? 'ambient'
     : isCopilotProcessing
       ? 'talking'
+      : isBotSpeaking
+      ? 'talking'
+      : isMicListening || isEnabled
+      ? 'listening'
       : mapAgentVisualizerState(agentState, isAgentConnected, connectionState);
 
   const handleMicToggle = useCallback(async () => {
@@ -796,26 +802,59 @@ export function ActiveRoom({
             )}
             <BotAudioVisualizer isSpeaking={isBotSpeaking} />
             {speechError && <p className="text-xs text-destructive">{speechError}</p>}
+
+            {hasMicPermission === false && (
+              <div className="mb-2 px-3 py-1.5 rounded-lg bg-red-500/20 border border-red-500/40 text-red-300 text-xs flex items-center gap-2">
+                <span>⚠️</span>
+                <span>Microphone access blocked in browser. Click the lock/permission icon in your browser URL bar and allow microphone.</span>
+              </div>
+            )}
+
             <div className="mb-2 w-full flex items-center justify-center">
               <AgentVisualizer state={visualizerState} size="lg" />
             </div>
 
-            {/* Real-time speech feedback bar */}
-            <div className="w-full max-w-xl mx-auto my-2 px-4 py-2 rounded-xl border border-indigo-500/30 bg-slate-900/90 shadow-lg shadow-indigo-500/10 flex flex-col items-center gap-1 transition-all">
-              <div className="flex items-center gap-2 text-xs font-semibold">
-                <span className={`w-2 h-2 rounded-full ${isBotSpeaking ? 'bg-amber-400' : isMicListening ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`}></span>
-                <span className={isBotSpeaking ? 'text-amber-300' : isMicListening ? 'text-emerald-300' : 'text-slate-400'}>
-                  {isBotSpeaking
-                    ? 'EchoOps AI Speaking...'
-                    : interimTranscript
-                    ? 'Transcribing your speech:'
-                    : isMicListening
-                    ? 'Listening... (Speak your update, hypothesis, or runbook command)'
-                    : 'Microphone inactive'}
-                </span>
+            {/* Real-time speech feedback bar & live audio meter */}
+            <div className="w-full max-w-xl mx-auto my-2 px-4 py-2.5 rounded-xl border border-indigo-500/30 bg-slate-900/90 shadow-lg shadow-indigo-500/10 flex flex-col items-center gap-2 transition-all">
+              <div className="w-full flex items-center justify-between text-xs font-semibold">
+                <div className="flex items-center gap-2">
+                  <span className={`w-2.5 h-2.5 rounded-full ${isBotSpeaking ? 'bg-amber-400' : isMicListening ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`}></span>
+                  <span className={isBotSpeaking ? 'text-amber-300' : isMicListening ? 'text-emerald-300' : 'text-slate-400'}>
+                    {isBotSpeaking
+                      ? 'EchoOps AI Speaking...'
+                      : interimTranscript
+                      ? 'Transcribing your speech:'
+                      : isMicListening
+                      ? 'Listening... (Speak your update, hypothesis, or runbook command)'
+                      : 'Microphone inactive'}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => startRecognition()}
+                  className="text-[11px] px-2 py-0.5 rounded bg-indigo-600/40 hover:bg-indigo-600 text-indigo-200 border border-indigo-500/40 transition-all cursor-pointer"
+                  title="Click to force-activate speech recognition"
+                >
+                  🎙️ Tap to Speak
+                </button>
               </div>
+
+              {/* Real-time Volume Level Meter */}
+              {isMicListening && (
+                <div className="w-full flex items-center gap-2">
+                  <span className="text-[10px] font-mono text-slate-400">MIC:</span>
+                  <div className="flex-1 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-emerald-500 via-teal-400 to-indigo-500 transition-all duration-75"
+                      style={{ width: `${Math.min(100, Math.max(micLevel * 2, 4))}%` }}
+                    ></div>
+                  </div>
+                  <span className="text-[10px] font-mono text-slate-400 w-7 text-right">{micLevel}%</span>
+                </div>
+              )}
+
               {interimTranscript && (
-                <div className="text-sm font-medium text-white px-3 py-1 bg-indigo-950/80 rounded border border-indigo-500/40 text-center animate-pulse">
+                <div className="w-full text-sm font-medium text-white px-3 py-1.5 bg-indigo-950/90 rounded border border-indigo-500/50 text-center animate-pulse">
                   "{interimTranscript}"
                 </div>
               )}
