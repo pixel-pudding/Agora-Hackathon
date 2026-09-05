@@ -32,9 +32,14 @@ export function useAiSpeechHandler({ channel }: UseAiSpeechHandlerOptions) {
   const processUserSpeech = useCallback(
     async (transcript: string, history: SpeechHistoryItem[] = []) => {
       const normalizedTranscript = transcript.trim();
-      if (!normalizedTranscript || isProcessingRef.current) return;
+      if (!normalizedTranscript) return;
 
-      abortControllerRef.current?.abort();
+      // Ensure any in-flight request is immediately aborted before starting a new turn
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+
       const abortController = new AbortController();
       abortControllerRef.current = abortController;
       isProcessingRef.current = true;
@@ -48,7 +53,7 @@ export function useAiSpeechHandler({ channel }: UseAiSpeechHandlerOptions) {
 
       const queueSpeechChunk = (text: string) => {
         const chunk = text.trim();
-        if (!chunk) return;
+        if (!chunk || abortController.signal.aborted) return;
         if (!receivedChunk) {
           receivedChunk = true;
           metrics.markLlmReady();
@@ -56,6 +61,7 @@ export function useAiSpeechHandler({ channel }: UseAiSpeechHandlerOptions) {
         }
         setAssistantReply((previous) => `${previous ?? ''}${text}`);
         queuedSpeech = queuedSpeech.then(async () => {
+          if (abortController.signal.aborted) return;
           const speakResponse = await fetch('/api/bot/speak', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -67,6 +73,8 @@ export function useAiSpeechHandler({ channel }: UseAiSpeechHandlerOptions) {
           }
         });
       };
+
+      let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
 
       try {
         metrics.markLlmRequest();
@@ -85,12 +93,13 @@ export function useAiSpeechHandler({ channel }: UseAiSpeechHandlerOptions) {
           );
         }
 
-        const reader = respondResponse.body.getReader();
+        reader = respondResponse.body.getReader();
         const decoder = new TextDecoder();
         let buffer = '';
         let streamDone = false;
 
         const handleEvent = (rawEvent: string) => {
+          if (abortController.signal.aborted) return;
           const data = rawEvent
             .split('\n')
             .filter((line) => line.startsWith('data:'))
@@ -108,16 +117,30 @@ export function useAiSpeechHandler({ channel }: UseAiSpeechHandlerOptions) {
         };
 
         while (!streamDone) {
+          if (abortController.signal.aborted) {
+            try {
+              await reader.cancel();
+            } catch {}
+            break;
+          }
           const { done, value } = await reader.read();
+          if (abortController.signal.aborted) {
+            try {
+              await reader.cancel();
+            } catch {}
+            break;
+          }
           buffer += decoder.decode(value, { stream: !done });
           const events = buffer.split('\n\n');
           buffer = events.pop() ?? '';
           events.forEach(handleEvent);
           if (done) break;
         }
-        if (buffer.trim()) handleEvent(buffer);
+        if (!abortController.signal.aborted && buffer.trim()) {
+          handleEvent(buffer);
+        }
         await queuedSpeech;
-        if (!receivedChunk) {
+        if (!receivedChunk && !abortController.signal.aborted) {
           throw new Error('The SRE copilot returned no speech content.');
         }
       } catch (error) {
@@ -138,8 +161,10 @@ export function useAiSpeechHandler({ channel }: UseAiSpeechHandlerOptions) {
   );
 
   const abortPendingSpeech = useCallback(() => {
-    abortControllerRef.current?.abort();
-    abortControllerRef.current = null;
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
     isProcessingRef.current = false;
     setIsProcessing(false);
   }, []);

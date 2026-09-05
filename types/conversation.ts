@@ -34,3 +34,5 @@ export interface ConversationComponentProps {
   onEndConversation: () => void;
   isStopping?: boolean;
 }
+
+export type ActiveRoomProps = ConversationComponentProps;
