@@ -289,15 +289,21 @@ export function ActiveRoom({
     isVadActiveRef.current = isVadActive;
   }, [isVadActive]);
 
-  // Hook handles transcript accumulation and mutes when bot is speaking
-  const { flushTranscript } = useSpeechCapture({
-    isMicActive: isReady && isEnabled && Boolean(localMicrophoneTrack),
-    isVadActive: isVadActive && !isBotSpeaking,
+  // Hook handles transcript accumulation and continuous speech recognition
+  const {
+    isListening: isMicListening,
+    interimTranscript,
+    flushTranscript,
+    isSupported: isSpeechSupported,
+  } = useSpeechCapture({
+    isMicActive: isReady && isEnabled,
+    isVadActive: true,
     isBotSpeaking,
-    agoraTranscriptionAvailable,
     agoraSpeech: isBotSpeaking ? null : agoraSpeech,
     onUtteranceComplete: processUserSpeech,
   });
+
+  const [customInputText, setCustomInputText] = useState('');
 
   const flushTranscriptRef = useRef(flushTranscript);
   useEffect(() => {
@@ -790,9 +796,58 @@ export function ActiveRoom({
             )}
             <BotAudioVisualizer isSpeaking={isBotSpeaking} />
             {speechError && <p className="text-xs text-destructive">{speechError}</p>}
-            <div className="mb-3 w-full flex items-center justify-center">
+            <div className="mb-2 w-full flex items-center justify-center">
               <AgentVisualizer state={visualizerState} size="lg" />
             </div>
+
+            {/* Real-time speech feedback bar */}
+            <div className="w-full max-w-xl mx-auto my-2 px-4 py-2 rounded-xl border border-indigo-500/30 bg-slate-900/90 shadow-lg shadow-indigo-500/10 flex flex-col items-center gap-1 transition-all">
+              <div className="flex items-center gap-2 text-xs font-semibold">
+                <span className={`w-2 h-2 rounded-full ${isBotSpeaking ? 'bg-amber-400' : isMicListening ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`}></span>
+                <span className={isBotSpeaking ? 'text-amber-300' : isMicListening ? 'text-emerald-300' : 'text-slate-400'}>
+                  {isBotSpeaking
+                    ? 'EchoOps AI Speaking...'
+                    : interimTranscript
+                    ? 'Transcribing your speech:'
+                    : isMicListening
+                    ? 'Listening... (Speak your update, hypothesis, or runbook command)'
+                    : 'Microphone inactive'}
+                </span>
+              </div>
+              {interimTranscript && (
+                <div className="text-sm font-medium text-white px-3 py-1 bg-indigo-950/80 rounded border border-indigo-500/40 text-center animate-pulse">
+                  "{interimTranscript}"
+                </div>
+              )}
+            </div>
+
+            {/* Emergency / Dispatcher Speech Input Form */}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!customInputText.trim() || isCopilotProcessing) return;
+                processUserSpeech(customInputText.trim());
+                setCustomInputText('');
+              }}
+              className="w-full max-w-xl mx-auto flex items-center gap-2 my-1"
+            >
+              <input
+                type="text"
+                value={customInputText}
+                onChange={(e) => setCustomInputText(e.target.value)}
+                placeholder="Type spoken update (e.g. 'I think the database pool is leaking')..."
+                className="flex-1 bg-slate-900/90 border border-slate-700 text-xs text-white px-3.5 py-2 rounded-lg focus:outline-none focus:border-indigo-500 font-sans"
+              />
+              <Button
+                type="submit"
+                size="sm"
+                disabled={!customInputText.trim() || isCopilotProcessing}
+                className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold px-4 py-2 rounded-lg shadow"
+              >
+                Send Turn
+              </Button>
+            </form>
+
             <div className="my-2 w-full flex items-center justify-center">
               <RunbookQuickActions
                 onExecuteCommand={(command) => processUserSpeech(command)}

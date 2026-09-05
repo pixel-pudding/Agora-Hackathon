@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-const UTTERANCE_PAUSE_MS = 1200;
+const UTTERANCE_PAUSE_MS = 750;
 
 type SpeechRecognitionAlternativeLike = {
   transcript: string;
@@ -34,6 +34,7 @@ type SpeechRecognitionLike = {
   onresult: ((event: SpeechRecognitionEventLike) => void) | null;
   start: () => void;
   stop: () => void;
+  abort: () => void;
 };
 
 type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
@@ -71,6 +72,8 @@ export function useSpeechCapture({
   const [isListening, setIsListening] = useState(false);
   const [interimTranscript, setInterimTranscript] = useState('');
   const [finalTranscript, setFinalTranscript] = useState('');
+  const [isSupported, setIsSupported] = useState(true);
+
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const pauseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingTranscriptRef = useRef('');
@@ -78,31 +81,32 @@ export function useSpeechCapture({
   const callbackRef = useRef(onUtteranceComplete);
   const shouldRestartRef = useRef(false);
   const lastAgoraIdRef = useRef<string | null>(null);
-
-  const isVadActiveRef = useRef(isVadActive);
   const isBotSpeakingRef = useRef(isBotSpeaking);
 
   useEffect(() => {
-    isVadActiveRef.current = isVadActive;
     isBotSpeakingRef.current = isBotSpeaking;
-  }, [isVadActive, isBotSpeaking]);
-
-  const flushTranscript = useCallback(() => {
-    const text = `${pendingTranscriptRef.current} ${interimTranscriptRef.current}`.trim();
-    pendingTranscriptRef.current = '';
-    interimTranscriptRef.current = '';
-    if (pauseTimerRef.current) clearTimeout(pauseTimerRef.current);
-    setInterimTranscript('');
-    if (text) callbackRef.current(text);
-    return text;
-  }, []);
+  }, [isBotSpeaking]);
 
   useEffect(() => {
     callbackRef.current = onUtteranceComplete;
   }, [onUtteranceComplete]);
 
-  // If the bot begins speaking, immediately discard any partial/interim transcript
-  // and cancel pending silence timers to prevent transcribing the bot's own voice.
+  const flushTranscript = useCallback(() => {
+    const text = `${pendingTranscriptRef.current} ${interimTranscriptRef.current}`.trim();
+    pendingTranscriptRef.current = '';
+    interimTranscriptRef.current = '';
+    if (pauseTimerRef.current) {
+      clearTimeout(pauseTimerRef.current);
+      pauseTimerRef.current = null;
+    }
+    setInterimTranscript('');
+    if (text) {
+      callbackRef.current(text);
+    }
+    return text;
+  }, []);
+
+  // If the bot begins speaking, discard partial interim text so bot echo isn't picked up
   useEffect(() => {
     if (isBotSpeaking) {
       interimTranscriptRef.current = '';
@@ -114,10 +118,10 @@ export function useSpeechCapture({
     }
   }, [isBotSpeaking]);
 
+  // Agora Cloud STT integration
   useEffect(() => {
     if (!agoraSpeech || !agoraSpeech.text.trim()) return;
-    // Guard: ignore incoming transcript if VAD is inactive or bot is speaking
-    if (!isVadActive || isBotSpeaking) return;
+    if (isBotSpeaking) return;
 
     const updateKey = agoraSpeech.id
       ? `${agoraSpeech.id}:${agoraSpeech.isFinal ? 'final' : 'interim'}`
@@ -131,67 +135,72 @@ export function useSpeechCapture({
       setFinalTranscript(text);
       interimTranscriptRef.current = '';
       setInterimTranscript('');
+      if (pauseTimerRef.current) clearTimeout(pauseTimerRef.current);
+      pauseTimerRef.current = setTimeout(() => {
+        flushTranscript();
+      }, 500);
     } else {
       interimTranscriptRef.current = text;
       setInterimTranscript(text);
     }
-  }, [agoraSpeech, isBotSpeaking, isVadActive]);
+  }, [agoraSpeech, isBotSpeaking, flushTranscript]);
 
+  // Browser Web Speech Recognition (Chrome / Safari / Edge)
   useEffect(() => {
-    if (!isMicActive || !isVadActive || isBotSpeaking || !agoraTranscriptionAvailable || !agoraSpeech?.isFinal) {
-      return;
-    }
-
-    if (pauseTimerRef.current) clearTimeout(pauseTimerRef.current);
-    pauseTimerRef.current = setTimeout(() => {
-      flushTranscript();
-    }, UTTERANCE_PAUSE_MS);
-
-    return () => {
-      if (pauseTimerRef.current) clearTimeout(pauseTimerRef.current);
-    };
-  }, [agoraSpeech, agoraTranscriptionAvailable, flushTranscript, isBotSpeaking, isMicActive, isVadActive]);
-
-  useEffect(() => {
-    // Mute browser speech recognition while mic is off, VAD is inactive, bot is speaking, or Agora transcription is handling STT
-    if (!isMicActive || !isVadActive || isBotSpeaking || agoraTranscriptionAvailable || typeof window === 'undefined') {
-      shouldRestartRef.current = false;
-      recognitionRef.current?.stop();
-      recognitionRef.current = null;
-      setIsListening(false);
-      return;
-    }
+    if (typeof window === 'undefined') return;
 
     const SpeechRecognition = (window as SpeechRecognitionWindow)
       .SpeechRecognition ?? (window as SpeechRecognitionWindow).webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
+      setIsSupported(false);
       setIsListening(false);
       return;
     }
 
-    const recognition = new SpeechRecognition();
+    if (!isMicActive) {
+      shouldRestartRef.current = false;
+      try {
+        recognitionRef.current?.abort();
+      } catch {}
+      recognitionRef.current = null;
+      setIsListening(false);
+      return;
+    }
+
+    let recognition: SpeechRecognitionLike;
+    try {
+      recognition = new SpeechRecognition();
+    } catch {
+      setIsListening(false);
+      return;
+    }
+
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.lang = language;
     shouldRestartRef.current = true;
 
     recognition.onresult = (event) => {
-      if (isBotSpeakingRef.current || !isVadActiveRef.current) return;
+      if (isBotSpeakingRef.current) return;
       let interim = '';
       let finalized = '';
 
       for (let index = event.resultIndex; index < event.results.length; index += 1) {
         const result = event.results[index];
         const text = result[0]?.transcript ?? '';
-        if (result.isFinal) finalized += text;
-        else interim += text;
+        if (result.isFinal) {
+          finalized += text;
+        } else {
+          interim += text;
+        }
       }
 
       if (interim.trim()) {
         interimTranscriptRef.current = interim.trim();
         setInterimTranscript(interim.trim());
       }
+
       if (finalized.trim()) {
         pendingTranscriptRef.current = `${pendingTranscriptRef.current} ${finalized}`.trim();
         interimTranscriptRef.current = '';
@@ -199,6 +208,7 @@ export function useSpeechCapture({
         setInterimTranscript('');
       }
 
+      // Schedule flush on pause
       if (pauseTimerRef.current) clearTimeout(pauseTimerRef.current);
       pauseTimerRef.current = setTimeout(() => {
         flushTranscript();
@@ -207,18 +217,18 @@ export function useSpeechCapture({
 
     recognition.onerror = (event) => {
       if (event.error !== 'aborted' && event.error !== 'no-speech') {
-        console.warn('Browser speech recognition unavailable:', event.error);
+        console.warn('Browser speech recognition notice:', event.error);
       }
-      setIsListening(false);
     };
 
     recognition.onend = () => {
       setIsListening(false);
-      if (!shouldRestartRef.current) return;
+      if (!shouldRestartRef.current || !isMicActive) return;
       try {
         recognition.start();
+        setIsListening(true);
       } catch {
-        shouldRestartRef.current = false;
+        // Will retry on next effect cycle
       }
     };
 
@@ -226,23 +236,26 @@ export function useSpeechCapture({
     try {
       recognition.start();
       setIsListening(true);
-    } catch {
-      shouldRestartRef.current = false;
-      setIsListening(false);
+    } catch (err) {
+      console.warn('Speech recognition start note:', err);
     }
 
     return () => {
       shouldRestartRef.current = false;
       if (pauseTimerRef.current) clearTimeout(pauseTimerRef.current);
       try {
-        recognition.stop();
-      } catch {
-        // The browser can throw when recognition has already ended.
-      }
+        recognition.abort();
+      } catch {}
       recognitionRef.current = null;
       setIsListening(false);
     };
-  }, [agoraTranscriptionAvailable, flushTranscript, isBotSpeaking, isMicActive, isVadActive, language]);
+  }, [flushTranscript, isMicActive, language]);
 
-  return { isListening, interimTranscript, finalTranscript, flushTranscript };
+  return {
+    isListening,
+    interimTranscript,
+    finalTranscript,
+    flushTranscript,
+    isSupported,
+  };
 }
