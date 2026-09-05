@@ -1,0 +1,1013 @@
+/* ========================================================
+   EchoOps — Voice AI Incident Commander Style System
+   ======================================================== */
+
+.app-layout {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.dashboard-container {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 1.5rem 2rem 3rem 2rem;
+  width: 100%;
+}
+
+/* --------------------------------------------------------
+   1. HEADER SECTION
+   -------------------------------------------------------- */
+.dashboard-header {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border-subtle);
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+}
+
+.header-inner {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 0.875rem 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+}
+
+.header-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+}
+
+.brand-icon-wrapper {
+  width: 42px;
+  height: 42px;
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  box-shadow: 0 4px 10px rgba(79, 70, 229, 0.25);
+}
+
+.brand-titles {
+  display: flex;
+  flex-direction: column;
+}
+
+.brand-name-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.brand-name {
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: #0f172a;
+}
+
+.brand-version-badge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  background: #ede9fe;
+  color: #6366f1;
+  padding: 0.15rem 0.45rem;
+  border-radius: var(--radius-full);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.brand-subtitle {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #64748b;
+  letter-spacing: -0.01em;
+}
+
+/* Header Live Status & Controls */
+.header-meta {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.live-status-pill {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  background: var(--success-light);
+  border: 1px solid var(--success-border);
+  padding: 0.4rem 0.85rem;
+  border-radius: var(--radius-full);
+  font-size: 0.775rem;
+  font-weight: 700;
+  color: var(--success-text);
+  letter-spacing: 0.02em;
+}
+
+.voice-channel-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-subtle);
+  padding: 0.4rem 0.85rem;
+  border-radius: var(--radius-full);
+  font-size: 0.775rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.audio-waves-container {
+  display: flex;
+  align-items: center;
+  gap: 2.5px;
+  height: 16px;
+}
+
+/* --------------------------------------------------------
+   2. ACTIVE INCIDENT BANNER / HERO
+   -------------------------------------------------------- */
+.incident-hero-card {
+  background: linear-gradient(180deg, #ffffff 0%, #fcfdfe 100%);
+  border: 1px solid var(--border-card);
+  border-left: 5px solid var(--danger);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  margin-bottom: 1.75rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+}
+
+.hero-main-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.incident-title-group {
+  flex: 1;
+  min-width: 280px;
+}
+
+.incident-badge-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.incident-id-badge {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+  background: #f1f5f9;
+  color: #475569;
+  padding: 0.2rem 0.55rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid #cbd5e1;
+}
+
+.severity-high-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 800;
+  background: var(--danger-light);
+  color: var(--danger-text);
+  border: 1px solid var(--danger-border);
+  padding: 0.2rem 0.65rem;
+  border-radius: var(--radius-full);
+  letter-spacing: 0.04em;
+}
+
+.status-active-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.75rem;
+  font-weight: 800;
+  background: #fff7ed;
+  color: #c2410c;
+  border: 1px solid #ffedd5;
+  padding: 0.2rem 0.65rem;
+  border-radius: var(--radius-full);
+  letter-spacing: 0.04em;
+}
+
+.incident-main-title {
+  font-size: 1.65rem;
+  font-weight: 800;
+  color: var(--text-main);
+  letter-spacing: -0.025em;
+  margin-bottom: 0.35rem;
+}
+
+.incident-summary-text {
+  font-size: 0.925rem;
+  color: var(--text-muted);
+  max-width: 820px;
+  line-height: 1.5;
+}
+
+/* Quick Metric Mini Cards */
+.hero-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(130px, 1fr));
+  gap: 0.875rem;
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.metric-mini-card {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 0.75rem 0.875rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.metric-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.metric-value {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--text-main);
+  letter-spacing: -0.02em;
+}
+
+.metric-value.critical {
+  color: var(--danger);
+}
+
+.metric-value.warning {
+  color: var(--warning);
+}
+
+/* --------------------------------------------------------
+   DASHBOARD 2-COLUMN MAIN GRID
+   -------------------------------------------------------- */
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  gap: 1.75rem;
+  align-items: start;
+}
+
+.grid-col {
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+}
+
+/* Section Header Bar within Cards */
+.card-header {
+  padding: 1.125rem 1.35rem;
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.card-title-group {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.card-icon-badge {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9rem;
+}
+
+.card-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-main);
+  letter-spacing: -0.015em;
+}
+
+.card-badge-count {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.15rem 0.5rem;
+  border-radius: var(--radius-full);
+  background: var(--bg-subtle);
+  color: var(--text-muted);
+  border: 1px solid var(--border-subtle);
+}
+
+.card-body {
+  padding: 1.35rem;
+}
+
+/* --------------------------------------------------------
+   3. INCIDENT TIMELINE
+   -------------------------------------------------------- */
+.timeline-container {
+  position: relative;
+  padding-left: 0.5rem;
+}
+
+.timeline-track {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 1.15rem;
+}
+
+.timeline-track::before {
+  content: '';
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  left: 17px;
+  width: 2px;
+  background: #e2e8f0;
+}
+
+.timeline-item {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.timeline-node {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 2px solid var(--border-card);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  z-index: 2;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+  flex-shrink: 0;
+}
+
+.timeline-node.alert {
+  border-color: #fca5a5;
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.timeline-node.error {
+  border-color: #fca5a5;
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.timeline-node.system {
+  border-color: #c7d2fe;
+  background: #eef2ff;
+  color: #4f46e5;
+}
+
+.timeline-node.warning {
+  border-color: #fde68a;
+  background: #fffbeb;
+  color: #d97706;
+}
+
+.timeline-node.action {
+  border-color: #a7f3d0;
+  background: #ecfdf5;
+  color: #059669;
+}
+
+.timeline-content-card {
+  flex: 1;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 0.875rem 1rem;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.15s ease;
+}
+
+.timeline-content-card:hover {
+  border-color: #cbd5e1;
+  background: var(--bg-card-hover);
+}
+
+.timeline-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.35rem;
+}
+
+.timeline-time-badge {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #1e293b;
+  background: #f1f5f9;
+  padding: 0.15rem 0.45rem;
+  border-radius: var(--radius-sm);
+}
+
+.timeline-tag {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-dim);
+}
+
+.timeline-event-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-main);
+  margin-bottom: 0.2rem;
+}
+
+.timeline-event-desc {
+  font-size: 0.825rem;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.timeline-source-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #64748b;
+  margin-top: 0.4rem;
+}
+
+/* --------------------------------------------------------
+   4. FACTS (CONFIRMED) & 5. ASSUMPTIONS (UNCONFIRMED)
+   -------------------------------------------------------- */
+.facts-list, .assumptions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+}
+
+.fact-item-card {
+  background: #ffffff;
+  border: 1px solid var(--success-border);
+  border-left: 4px solid var(--success);
+  border-radius: var(--radius-md);
+  padding: 0.875rem 1rem;
+  box-shadow: 0 1px 3px rgba(5, 150, 105, 0.04);
+}
+
+.fact-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+
+.confirmed-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.7rem;
+  font-weight: 800;
+  color: var(--success);
+  background: var(--success-light);
+  padding: 0.15rem 0.45rem;
+  border-radius: var(--radius-full);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.fact-text {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #1e293b;
+  line-height: 1.45;
+}
+
+.fact-footer-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 0.4rem;
+  font-size: 0.72rem;
+  color: var(--text-dim);
+}
+
+/* Assumptions Styling */
+.assumption-item-card {
+  background: #ffffff;
+  border: 1px solid var(--warning-border);
+  border-left: 4px solid var(--warning);
+  border-radius: var(--radius-md);
+  padding: 0.875rem 1rem;
+  box-shadow: 0 1px 3px rgba(217, 119, 6, 0.04);
+}
+
+.unconfirmed-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.7rem;
+  font-weight: 800;
+  color: var(--warning-text);
+  background: var(--warning-light);
+  padding: 0.15rem 0.45rem;
+  border-radius: var(--radius-full);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.assumption-text {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #1e293b;
+  line-height: 1.45;
+}
+
+.assumption-footer-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 0.4rem;
+  font-size: 0.72rem;
+  color: var(--text-dim);
+}
+
+/* --------------------------------------------------------
+   6. ACTION & OWNERSHIP
+   -------------------------------------------------------- */
+.actions-table-wrapper {
+  overflow-x: auto;
+}
+
+.actions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.action-row-card {
+  background: #ffffff;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 0.875rem 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  transition: all 0.15s ease;
+}
+
+.action-row-card:hover {
+  border-color: #cbd5e1;
+  background: #fafafa;
+}
+
+.action-main-info {
+  flex: 1;
+  min-width: 220px;
+}
+
+.action-title-text {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--text-main);
+  margin-bottom: 0.3rem;
+}
+
+.action-owner-tag {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.owner-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  font-size: 0.68rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.owner-name {
+  font-size: 0.775rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.owner-role {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+}
+
+/* Status Badges for Actions */
+.status-pill {
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 0.25rem 0.65rem;
+  border-radius: var(--radius-full);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  user-select: none;
+  transition: transform 0.1s ease;
+  white-space: nowrap;
+}
+
+.status-pill:hover {
+  transform: scale(1.03);
+}
+
+.status-completed {
+  background: var(--success-light);
+  color: var(--success-text);
+  border: 1px solid var(--success-border);
+}
+
+.status-in-progress {
+  background: var(--info-light);
+  color: var(--info-text);
+  border: 1px solid var(--info-border);
+}
+
+.status-pending {
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+}
+
+/* --------------------------------------------------------
+   7. ALERTS (Conflict, Gap, Risk)
+   -------------------------------------------------------- */
+.alerts-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+}
+
+.alert-box {
+  background: #ffffff;
+  border-radius: var(--radius-md);
+  padding: 1rem 1.125rem;
+  display: flex;
+  gap: 0.875rem;
+  transition: all 0.2s ease;
+}
+
+.alert-box.alert-conflict {
+  border: 1px solid #fecaca;
+  border-left: 4px solid #ef4444;
+  background: #fffafa;
+}
+
+.alert-box.alert-gap {
+  border: 1px solid #fed7aa;
+  border-left: 4px solid #f97316;
+  background: #fffaf5;
+}
+
+.alert-box.alert-risk {
+  border: 1px solid #ddd6fe;
+  border-left: 4px solid #8b5cf6;
+  background: #faf8ff;
+}
+
+.alert-icon-col {
+  flex-shrink: 0;
+  padding-top: 0.15rem;
+}
+
+.alert-content-col {
+  flex: 1;
+}
+
+.alert-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.alert-category-tag {
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.1rem 0.4rem;
+  border-radius: var(--radius-sm);
+}
+
+.tag-conflict {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.tag-gap {
+  background: #ffedd5;
+  color: #9a3412;
+}
+
+.tag-risk {
+  background: #ede9fe;
+  color: #5b21b6;
+}
+
+.alert-heading {
+  font-size: 0.925rem;
+  font-weight: 700;
+  color: var(--text-main);
+  margin-bottom: 0.25rem;
+}
+
+.alert-description {
+  font-size: 0.825rem;
+  color: var(--text-muted);
+  line-height: 1.45;
+  margin-bottom: 0.4rem;
+}
+
+.alert-impact-box {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #334155;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px dashed #cbd5e1;
+  padding: 0.35rem 0.65rem;
+  border-radius: var(--radius-sm);
+}
+
+/* --------------------------------------------------------
+   8. HUMAN-IN-THE-LOOP (HITL APPROVAL)
+   -------------------------------------------------------- */
+.hitl-container {
+  background: linear-gradient(180deg, #ffffff 0%, #fbfcfe 100%);
+  border: 2px solid #6366f1;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.12);
+}
+
+.hitl-header-banner {
+  background: linear-gradient(90deg, #4f46e5 0%, #6366f1 100%);
+  color: #ffffff;
+  padding: 0.875rem 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.hitl-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.hitl-guardrail-badge {
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  font-size: 0.68rem;
+  font-weight: 800;
+  padding: 0.15rem 0.5rem;
+  border-radius: var(--radius-full);
+  text-transform: uppercase;
+}
+
+.hitl-body {
+  padding: 1.35rem;
+}
+
+.hitl-action-box {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: var(--radius-md);
+  padding: 1rem 1.15rem;
+  margin-bottom: 1.15rem;
+}
+
+.hitl-action-title {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: #0f172a;
+  margin-bottom: 0.25rem;
+}
+
+.hitl-action-sub {
+  font-size: 0.825rem;
+  font-weight: 600;
+  color: #6366f1;
+  margin-bottom: 0.6rem;
+}
+
+.hitl-consequence-text {
+  font-size: 0.825rem;
+  color: #475569;
+  line-height: 1.45;
+}
+
+.hitl-footer-action-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.hitl-approval-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.775rem;
+  color: #64748b;
+  font-weight: 600;
+}
+
+/* Button & Confirmed States */
+.btn-confirm-action {
+  background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
+  color: #ffffff;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  font-size: 0.925rem;
+  font-weight: 700;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  box-shadow: 0 4px 10px rgba(79, 70, 229, 0.28);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.btn-confirm-action:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 14px rgba(79, 70, 229, 0.35);
+  background: linear-gradient(135deg, #4338ca 0%, #3730a3 100%);
+}
+
+.btn-confirm-action:active {
+  transform: translateY(0);
+}
+
+.btn-action-confirmed {
+  background: #ecfdf5;
+  color: #047857;
+  border: 1.5px solid #10b981;
+  padding: 0.75rem 1.5rem;
+  font-size: 0.925rem;
+  font-weight: 800;
+  border-radius: var(--radius-md);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.15);
+  animation: confirmPop 0.3s ease-out;
+}
+
+@keyframes confirmPop {
+  0% { transform: scale(0.95); opacity: 0.8; }
+  50% { transform: scale(1.03); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.btn-reset-demo {
+  background: transparent;
+  color: #94a3b8;
+  border: 1px solid #e2e8f0;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-reset-demo:hover {
+  color: #475569;
+  border-color: #cbd5e1;
+  background: #f8fafc;
+}
+
+/* --------------------------------------------------------
+   VOICE AI REAL-TIME TRANSCRIPT STREAM
+   -------------------------------------------------------- */
+.voice-transcript-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: var(--radius-md);
+  padding: 0.875rem 1rem;
+}
+
+.voice-stream-item {
+  padding: 0.5rem 0;
+  border-bottom: 1px dashed #f1f5f9;
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.voice-stream-item:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.voice-speaker-badge {
+  font-weight: 700;
+  color: #4f46e5;
+  margin-right: 0.35rem;
+}
+
+/* --------------------------------------------------------
+   9. RESPONSIVE DESIGN BREAKPOINTS
+   -------------------------------------------------------- */
+@media (max-width: 1080px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+
+  .hero-metrics-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .dashboard-container {
+    padding: 1rem 1rem 2.5rem 1rem;
+  }
+
+  .header-inner {
+    padding: 0.75rem 1rem;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  .header-meta {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .hero-metrics-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .incident-main-title {
+    font-size: 1.35rem;
+  }
+
+  .hitl-footer-action-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .btn-confirm-action, .btn-action-confirmed {
+    justify-content: center;
+    width: 100%;
+  }
+
+  .action-row-card {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+}
