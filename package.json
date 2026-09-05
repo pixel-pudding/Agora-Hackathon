@@ -1,7 +1,7 @@
 {
-  "name": "convoai-quickstart-web-nextjs",
-  "version": "0.1.0",
-  "description": "Next.js quickstart for building conversational AI applications with Agora's Conversational AI Engine",
+  "name": "echoops-voice-ai-incident-commander",
+  "version": "1.0.0",
+  "description": "EchoOps - Real-Time Voice AI Incident Commander powered by Agora, Next.js, and PostgreSQL",
   "private": true,
   "engines": {
     "node": ">=22"
@@ -11,6 +11,8 @@
     "dev": "next dev --webpack",
     "build": "next build",
     "start": "next start",
+    "dev:vite": "vite",
+    "build:vite": "vite build",
     "lint": "eslint .",
     "verify:api": "node --import tsx scripts/verify-api-contracts.ts",
     "typecheck": "tsc --noEmit",

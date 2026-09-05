@@ -1,200 +1,67 @@
-# EchoOps Voice Room
+# EchoOps — Real-Time Voice AI Incident Commander
 
-[![Build](https://github.com/AgoraIO-Conversational-AI/agent-quickstart-nextjs/actions/workflows/build-check.yml/badge.svg)](https://github.com/AgoraIO-Conversational-AI/agent-quickstart-nextjs/actions/workflows/build-check.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D22-brightgreen)](https://nodejs.org/)
 
-EchoOps is a real-time incident voice room built with Next.js and Agora Conversational AI. It includes a shared incident-room name, browser RTC audio, live transcripts, a virtual EchoOps bot, and Agora-managed speech-to-text, LLM, and text-to-speech.
+EchoOps is a real-time Voice AI Incident Commander built with Agora Conversational AI, Next.js, PostgreSQL (`pgvector`), and a dynamic Incident Dashboard.
 
-## Prerequisites
+---
 
-- [Node.js 22+](https://nodejs.org/en/download/)
-- [pnpm](https://pnpm.io/installation)
-- [Agora CLI](https://github.com/AgoraIO-Community/cli)
+## 👥 Team Echo Sphere (Code Forge)
+1. **Monisha K P** — Team Lead / Backend & Integrations
+2. **Aditi Anand** — AI & Intelligence Pipeline
+3. **Megha Biradar** — Frontend & Incident Dashboard
+4. **Yashika Venugopal** — Real-Time Communication
 
-## Run It
+---
 
-Getting started is quick and easy: install the CLI _(skip if you already have it)_ , scaffold the Next.js quickstart using the Agora CLI, install dependencies, and run.
+## 🏗️ Architecture & Modules
 
-1. **Install the Agora CLI and sign in**
-   _(skip if `agora` is already on your PATH)_:
+* **Agora RTC Voice Room & Conversational AI Agent**: Real-time multi-party voice communication on Agora SD-RTN, managed STT (Deepgram `nova-3`), LLM (OpenAI `gpt-4o-mini`), and TTS (MiniMax `speech_2_6_turbo`).
+* **Frontend Incident Dashboard** (`src/` & `components/`):
+  * Active Incident Card & Severity Indicators (`src/components/ActiveIncidentCard.jsx`)
+  * Facts vs Assumptions Cards (`src/components/FactsCard.jsx`, `src/components/AssumptionsCard.jsx`)
+  * Action Items & Task Ownership Tracker (`src/components/ActionOwnership.jsx`)
+  * Human-in-the-Loop Approval Modal (`src/components/HumanInTheLoop.jsx`)
+  * Live Incident Timeline (`src/components/IncidentTimeline.jsx`)
+  * Voice Transcript Stream & Waveform Visualizer (`src/components/VoiceTranscriptStream.jsx`)
+  * Active Voice Room & SRE Runbook Quick Actions (`components/ActiveRoom.tsx`, `components/RunbookQuickActions.tsx`)
+* **Backend Orchestration & Database**:
+  * PostgreSQL Schema with `pgvector` (`lib/db/schema.sql`, `lib/db/models.ts`)
+  * WebSocket / SSE Event Hub (`lib/wsHub.ts`, `app/api/events/route.ts`)
+  * Incident Ingestion & State Machine (`app/api/orchestration/state/route.ts`)
+  * Human-in-the-Loop Approval Gate (`app/api/actions/[id]/confirm/route.ts`)
+  * Enterprise Integrations: Slack (`lib/integrations/slack.ts`), Jira (`lib/integrations/jira.ts`), PagerDuty (`lib/integrations/pagerduty.ts`)
+  * Agora Cloud Recording & Analytics (`app/api/recording/route.ts`, `app/api/analytics/route.ts`)
 
-   macOS and Linux:
+---
 
-   ```bash
-   curl -fsSL https://dl.agora.io/cli/install.sh | sh
-   ```
+## 🚀 Quick Start
 
-   Windows PowerShell:
+### 1. Prerequisites
+* Node.js 22+
+* Agora Account App ID & App Certificate
 
-   ```powershell
-   irm https://dl.agora.io/cli/install.ps1 | iex
-   ```
-
-   If the Windows install command fails in PowerShell, try running the macOS/Linux command from [Git Bash](https://git-scm.com/downloads/win), then open a new terminal and run `agora --help` to confirm the CLI is on your PATH.
-
-   Then verify and sign in:
-
-   ```bash
-   agora --help
-   agora login
-   ```
-
-   If `agora --help` is not found after install, close and reopen your terminal, then try again. If it still fails, check that the installer-added Agora CLI location is on your shell `PATH`.
-
-2. **Scaffold and run**
-   `agora init` clones the starter, binds an Agora project, and writes `.env.local`. (replace `my-nextjs-demo` with your own project name):
-
-   ```bash
-   agora init my-nextjs-demo --template nextjs
-   cd my-nextjs-demo
-   pnpm install
-   pnpm dev
-   ```
-
-3. Open [http://localhost:3000](http://localhost:3000), enter an incident room name to join an existing room (or leave it blank to create one), then click **Join Incident Room**.
-
-If the agent does not join or transcripts do not appear, run **`agora project doctor --deep`** to check credentials, feature enablement, network reachability, and local env binding.
-
-### Working from a clone of this repository
-
-Use this path if you already cloned **this** repo (for example to contribute or fork):
-
+### 2. Environment Setup
+Copy the environment template:
 ```bash
-git clone https://github.com/AgoraIO-Conversational-AI/agent-quickstart-nextjs.git
-cd agent-quickstart-nextjs
-agora login
-agora project use <your-project>
+cp env.local.example .env.local
+```
+Fill in your Agora credentials:
+```bash
+NEXT_PUBLIC_AGORA_APP_ID="your_app_id"
+NEXT_AGORA_APP_CERTIFICATE="your_app_certificate"
+```
+
+### 3. Run the App
+```bash
 pnpm install
-agora project env write .env.local
-agora project doctor --deep
 pnpm dev
 ```
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-### Deploy to Vercel
+---
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FAgoraIO-Conversational-AI%2Fagent-quickstart-nextjs&project-name=agent-quickstart-nextjs&repository-name=agent-quickstart-nextjs&env=NEXT_PUBLIC_AGORA_APP_ID,NEXT_AGORA_APP_CERTIFICATE&envDescription=Agora%20credentials%20needed%20to%20run%20the%20app&envLink=https%3A%2F%2Fgithub.com%2FAgoraIO-Conversational-AI%2Fagent-quickstart-nextjs%23run-it&demo-title=Agora%20Conversational%20AI%20Next.js%20Quickstart&demo-description=Official%20Next.js%20quickstart%20for%20building%20browser-based%20voice%20AI%20with%20Agora&demo-image=https%3A%2F%2Fraw.githubusercontent.com%2FAgoraIO-Conversational-AI%2Fagent-quickstart-nextjs%2Fmain%2F.github%2Fassets%2FConversation-Ai-Client.gif)
-
-To populate Vercel env vars from your bound Agora project:
-
-```bash
-agora project use <your-project>
-agora project env write .env.local
-rg "^(NEXT_PUBLIC_AGORA_APP_ID|NEXT_AGORA_APP_CERTIFICATE)=" .env.local
-```
-
-Copy those two values into Vercel Project Settings -> Environment Variables.
-
-### Environment variables
-
-Defined in [`env.local.example`](env.local.example).
-
-| Variable                     | Required | Notes                                                            |
-| ---------------------------- | :------: | ---------------------------------------------------------------- |
-| `NEXT_PUBLIC_AGORA_APP_ID`   |    ✅    | Agora Console → Project → App ID.                                |
-| `NEXT_AGORA_APP_CERTIFICATE` |    ✅    | Agora Console → Project → App Certificate. **Server-side only.** |
-
-The default agent configuration in [`app/api/invite-agent/route.ts`](app/api/invite-agent/route.ts) uses Agora-managed STT, LLM, and TTS, so no extra vendor API keys are required for the base quickstart.
-
-## Commands
-
-```bash
-# Dev
-pnpm dev                # start the Next.js dev server
-
-# Quality
-pnpm run lint           # eslint
-pnpm run typecheck      # tsc --noEmit
-pnpm run doctor         # local prereqs + env binding
-
-# CI / pre-ship
-pnpm run verify:api     # API contract checks
-pnpm run build          # production build
-pnpm run verify         # doctor + lint + typecheck + verify:api + build
-```
-
-Run `pnpm run verify` before shipping changes — it covers local prerequisites, lint, type safety, the core API route contracts, and the production build.
-
-## Architecture
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="./system-architecture-dark.svg">
-  <img src="./system-architecture.svg" alt="System architecture">
-</picture>
-
-The browser fetches a combined RTC + RTM token (`buildTokenWithRtm`) from this app, joins the channel using a single RTC client, and uses RTM as the data channel for transcript, agent state, metrics, and error events. The Conversational AI Engine joins the same channel as the shared agent UID in [`lib/agora.ts`](lib/agora.ts) and runs the STT → LLM → TTS pipeline in Agora Cloud.
-
-## What You Get
-
-- browser voice client built with Next.js App Router
-- RTC audio plus RTM transcript and state events
-- server routes for token generation, invite, and stop
-- [`AgentVisualizer`](https://agoraio-conversational-ai.github.io/agent-uikit/) for agent state and a built-in transcript panel for live turns
-- per-stage latency header driven by `AGENT_METRICS`
-- Agora-managed default STT, LLM, and TTS configuration
-
-## How It Works
-
-1. The browser requests an RTC + RTM token from `/api/generate-agora-token`.
-2. The backend invites an Agora cloud agent with `/api/invite-agent`.
-3. The browser joins the channel and publishes mic audio.
-4. The client receives transcript, agent state, and `AGENT_METRICS` (per-stage latency) events over RTM.
-5. On end, the client calls `/api/stop-conversation`, logs out RTM, and unmounts the call view so Agora React hooks clean up RTC publish/join and the local microphone track.
-
-## Optional BYOK
-
-The base `.env.local` contract contains only Agora credentials. If you are migrating from a supported provider, uncomment the matching snippet in [`app/api/invite-agent/route.ts`](app/api/invite-agent/route.ts) and add its variables to your local environment.
-
-```bash
-# Deepgram STT
-NEXT_DEEPGRAM_API_KEY=...
-
-# OpenAI-compatible LLM
-NEXT_LLM_URL=https://api.openai.com/v1/chat/completions
-NEXT_LLM_API_KEY=...
-
-# ElevenLabs TTS
-NEXT_ELEVENLABS_API_KEY=...
-NEXT_ELEVENLABS_VOICE_ID=...
-```
-
-## Repo Map
-
-- `app/api/generate-agora-token/route.ts` — issues RTC + RTM tokens
-- `app/api/invite-agent/route.ts` — starts the agent session and configures the pipeline
-- `app/api/stop-conversation/route.ts` — stops the agent session
-- `components/LandingPage.tsx` — entry point: token fetch, RTM login, conversation lifecycle
-- `components/ConversationComponent.tsx` — RTC client, transcript state, `AGENT_METRICS`, mic release
-- `components/QuickstartConversationLayout.tsx` — in-call header, transcript rail, controls dock
-- `components/QuickstartPipelineMetrics.tsx` — per-stage latency chips in the header
-- `components/QuickstartTranscriptPanel.tsx` — live transcript rail
-- `components/QuickstartPreCallCard.tsx` — pre-call hero card
-- `lib/conversation.ts` — transcript normalization and visualizer state mapping
-- `AGENTS.md` — primary agent-facing guide
-
-## Troubleshooting
-
-- **Agent does not join or transcripts are missing:** run `agora project doctor --deep`.
-- **`pnpm run doctor` fails:** run `agora project env write .env.local`, then retry.
-- **Manual clone / env values:** `agora project use <your-project>` then `agora project env write .env.local`.
-- **RTM login fails:** keep [`app/api/generate-agora-token/route.ts`](app/api/generate-agora-token/route.ts) on `RtcTokenBuilder.buildTokenWithRtm` — RTC-only tokens will not satisfy `rtm.login`.
-- **Transcript speakers inverted:** check the `uid === "0"` remap in [`components/ConversationComponent.tsx`](components/ConversationComponent.tsx).
-- **Agent never appears in channel:** ensure the shared agent UID in [`lib/agora.ts`](lib/agora.ts) is used by both the client and invite route.
-
-## More Docs
-
-- [docs/ai/L0_repo_card.md](./docs/ai/L0_repo_card.md)
-- [docs/ai/RECIPE.md](./docs/ai/RECIPE.md)
-- [AGENTS.md](./AGENTS.md)
-
-## Contributing
-
-Pull requests welcome — see [CONTRIBUTING.md](./CONTRIBUTING.md) for development setup and conventions.
-
-## Security
-
-Please do **not** open public issues for security reports. Email security@agora.io with details and reproduction steps.
-
-## License
-
-Released under the [MIT License](./LICENSE).
+## 📜 Documentation
+* Full Backend API & WebSocket Reference: [`BACKEND_README.md`](./BACKEND_README.md)
+* Agent Development Guide: [`AGENTS.md`](./AGENTS.md)
