@@ -1,28 +1,78 @@
 import { NextRequest, NextResponse } from 'next/server';
-import type { ArchivedIncident } from '@/components/IncidentHistoryDrawer';
+import {
+  getOrCreateIncident,
+  getAllArchivedIncidents,
+  searchSemanticMemory,
+  updateIncidentState,
+  addFactToIncident,
+  addActionItemToIncident,
+} from '@/lib/incidentStore';
+import type { IncidentScenario, IncidentSeverity, IncidentStatus } from '@/types/incident';
 
-let incidents: ArchivedIncident[] = [];
+export const dynamic = 'force-dynamic';
 
-function isArchivedIncident(value: unknown): value is ArchivedIncident {
-  if (!value || typeof value !== 'object') return false;
-  const incident = value as Record<string, unknown>;
-  return typeof incident.id === 'string' && typeof incident.title === 'string' && typeof incident.timestamp === 'string' &&
-    (incident.severity === 'Sev-1' || incident.severity === 'Sev-2' || incident.severity === 'Sev-3') &&
-    typeof incident.summary === 'string' && Array.isArray(incident.actionItems) && incident.actionItems.every((item) => typeof item === 'string') &&
-    Array.isArray(incident.timeline) && incident.timeline.every((entry) => entry !== null && typeof entry === 'object' && typeof (entry as Record<string, unknown>).time === 'string' && typeof (entry as Record<string, unknown>).note === 'string');
-}
+export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
+  const channel = searchParams.get('channel') || 'echoops-war-room';
+  const scenario = (searchParams.get('scenario') as IncidentScenario) || 'tech_outage';
+  const query = searchParams.get('q') || '';
 
-export async function GET() {
-  return NextResponse.json({ incidents });
+  const activeIncident = getOrCreateIncident(channel, scenario);
+  const archivedIncidents = getAllArchivedIncidents();
+  const pastKnowledge = searchSemanticMemory(scenario, query);
+
+  return NextResponse.json({
+    activeIncident,
+    archivedIncidents,
+    pastKnowledge,
+  });
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const payload: unknown = await request.json();
-    if (!isArchivedIncident(payload)) return NextResponse.json({ error: 'Invalid incident payload' }, { status: 400 });
-    incidents = [payload, ...incidents.filter((incident) => incident.id !== payload.id)];
-    return NextResponse.json({ success: true, incident: payload });
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON payload' }, { status: 400 });
+    const body = await request.json();
+    const channel = body.channel || 'echoops-war-room';
+
+    if (body.action === 'reset_scenario') {
+      const scenario = (body.scenario as IncidentScenario) || 'tech_outage';
+      // Force recreate default incident for scenario
+      const freshIncident = getOrCreateIncident(channel, scenario);
+      freshIncident.scenario = scenario;
+      return NextResponse.json({ success: true, incident: freshIncident });
+    }
+
+    if (body.action === 'add_fact') {
+      const fact = addFactToIncident(channel, {
+        statement: body.statement,
+        verifiedBy: body.verifiedBy || 'Commander',
+        confidence: body.confidence || 1.0,
+      });
+      return NextResponse.json({ success: true, fact });
+    }
+
+    if (body.action === 'add_action') {
+      const actionItem = addActionItemToIncident(channel, {
+        task: body.task,
+        owner: body.owner || 'Unassigned',
+        status: 'pending',
+        deadline: body.deadline,
+        requiresConfirmation: body.requiresConfirmation,
+      });
+      return NextResponse.json({ success: true, actionItem });
+    }
+
+    if (body.action === 'update_status') {
+      const updated = updateIncidentState(channel, (prev) => ({
+        ...prev,
+        status: (body.status as IncidentStatus) || prev.status,
+        severity: (body.severity as IncidentSeverity) || prev.severity,
+      }));
+      return NextResponse.json({ success: true, incident: updated });
+    }
+
+    return NextResponse.json({ error: 'Unsupported action' }, { status: 400 });
+  } catch (error) {
+    console.error('Error in /api/incidents POST:', error);
+    return NextResponse.json({ error: 'Failed to process request' }, { status: 500 });
   }
 }
