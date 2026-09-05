@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-const UTTERANCE_PAUSE_MS = 800;
+const UTTERANCE_PAUSE_MS = 1000;
 
 type SpeechRecognitionAlternativeLike = {
   transcript: string;
@@ -23,6 +23,7 @@ type SpeechRecognitionEventLike = Event & {
 
 type SpeechRecognitionErrorEventLike = Event & {
   error: string;
+  message?: string;
 };
 
 type SpeechRecognitionLike = {
@@ -76,6 +77,7 @@ export function useSpeechCapture({
   const [micLevel, setMicLevel] = useState(0);
   const [hasMicPermission, setHasMicPermission] = useState<boolean | null>(null);
   const [isSupported, setIsSupported] = useState(true);
+  const [statusMessage, setStatusMessage] = useState('');
 
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
@@ -97,6 +99,7 @@ export function useSpeechCapture({
     callbackRef.current = onUtteranceComplete;
   }, [onUtteranceComplete]);
 
+  // Flush and dispatch accumulated transcript
   const flushTranscript = useCallback(() => {
     const text = `${pendingTranscriptRef.current} ${interimTranscriptRef.current}`.trim();
     pendingTranscriptRef.current = '';
@@ -112,44 +115,39 @@ export function useSpeechCapture({
     return text;
   }, []);
 
-  // Request browser microphone permission & setup local AudioContext analyzer
-  useEffect(() => {
-    if (typeof window === 'undefined' || !navigator.mediaDevices?.getUserMedia) return;
+  // Ensure microphone MediaStream is active
+  const ensureMediaStream = useCallback(async () => {
+    if (typeof window === 'undefined' || !navigator.mediaDevices?.getUserMedia) return null;
+    if (mediaStreamRef.current && mediaStreamRef.current.active) {
+      return mediaStreamRef.current;
+    }
 
-    let isMounted = true;
-    let animFrame: number;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      });
 
-    async function initAudio() {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-          },
-        });
+      mediaStreamRef.current = stream;
+      setHasMicPermission(true);
 
-        if (!isMounted) {
-          stream.getTracks().forEach((t) => t.stop());
-          return;
-        }
-
-        mediaStreamRef.current = stream;
-        setHasMicPermission(true);
-
-        const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      const AudioCtx =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      if (AudioCtx && !audioContextRef.current) {
         const ctx = new AudioCtx();
         audioContextRef.current = ctx;
-
         const source = ctx.createMediaStreamSource(stream);
         const analyser = ctx.createAnalyser();
         analyser.fftSize = 256;
         source.connect(analyser);
 
         const dataArray = new Uint8Array(analyser.frequencyBinCount);
-
         const checkVolume = () => {
-          if (!isMounted) return;
+          if (!mediaStreamRef.current?.active) return;
           analyser.getByteFrequencyData(dataArray);
           let sum = 0;
           for (let i = 0; i < dataArray.length; i++) {
@@ -157,40 +155,40 @@ export function useSpeechCapture({
           }
           const avg = Math.round((sum / dataArray.length / 255) * 100);
           setMicLevel(avg);
-          animFrame = requestAnimationFrame(checkVolume);
+          requestAnimationFrame(checkVolume);
         };
-        animFrame = requestAnimationFrame(checkVolume);
-      } catch (err) {
-        console.warn('Microphone permission notice:', err);
-        if (isMounted) setHasMicPermission(false);
+        requestAnimationFrame(checkVolume);
       }
-    }
 
+      return stream;
+    } catch (err) {
+      console.warn('Microphone permission notice:', err);
+      setHasMicPermission(false);
+      return null;
+    }
+  }, []);
+
+  // Request browser microphone permission on mount or when mic is active
+  useEffect(() => {
     if (isMicActive) {
-      initAudio();
+      ensureMediaStream();
     }
-
-    return () => {
-      isMounted = false;
-      if (animFrame) cancelAnimationFrame(animFrame);
-      if (audioContextRef.current) {
-        audioContextRef.current.close().catch(() => {});
-      }
-      if (mediaStreamRef.current) {
-        mediaStreamRef.current.getTracks().forEach((t) => t.stop());
-      }
-    };
-  }, [isMicActive]);
+  }, [isMicActive, ensureMediaStream]);
 
   // Start continuous Web Speech Recognition
-  const startRecognition = useCallback(() => {
+  const startRecognition = useCallback(async () => {
     if (typeof window === 'undefined') return;
 
-    const SpeechRecognition = (window as SpeechRecognitionWindow)
-      .SpeechRecognition ?? (window as SpeechRecognitionWindow).webkitSpeechRecognition;
+    // First ensure we have audio stream / mic permission
+    await ensureMediaStream();
+
+    const SpeechRecognition =
+      (window as SpeechRecognitionWindow).SpeechRecognition ??
+      (window as SpeechRecognitionWindow).webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
       setIsSupported(false);
+      setStatusMessage('SpeechRecognition API not supported in this browser. Use Chrome/Edge or type directly.');
       return;
     }
 
@@ -242,13 +240,14 @@ export function useSpeechCapture({
 
       recognition.onerror = (event) => {
         if (event.error !== 'aborted' && event.error !== 'no-speech') {
-          console.warn('SpeechRecognition notice:', event.error);
+          console.warn('SpeechRecognition error:', event.error);
+          setStatusMessage(`Speech Recognition: ${event.error}`);
         }
       };
 
       recognition.onend = () => {
         setIsListening(false);
-        if (shouldRestartRef.current && isMicActive && !isBotSpeakingRef.current) {
+        if (shouldRestartRef.current && !isBotSpeakingRef.current) {
           try {
             recognition.start();
             setIsListening(true);
@@ -259,18 +258,20 @@ export function useSpeechCapture({
       recognitionRef.current = recognition;
       recognition.start();
       setIsListening(true);
+      setStatusMessage('Listening...');
     } catch (err) {
       console.warn('Could not start SpeechRecognition:', err);
       setIsListening(false);
     }
-  }, [flushTranscript, isMicActive, language]);
+  }, [ensureMediaStream, flushTranscript, language]);
 
   // Audio Recorder for server-side Whisper fallback
-  const startRecordingAudio = useCallback(() => {
-    if (!mediaStreamRef.current) return;
+  const startRecordingAudio = useCallback(async () => {
+    const stream = await ensureMediaStream();
+    if (!stream) return;
     try {
       audioChunksRef.current = [];
-      const recorder = new MediaRecorder(mediaStreamRef.current);
+      const recorder = new MediaRecorder(stream);
       recorder.ondataavailable = (e) => {
         if (e.data && e.data.size > 0) {
           audioChunksRef.current.push(e.data);
@@ -304,28 +305,41 @@ export function useSpeechCapture({
     } catch (err) {
       console.warn('MediaRecorder start notice:', err);
     }
-  }, []);
+  }, [ensureMediaStream]);
 
   const stopRecordingAudio = useCallback(() => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
       mediaRecorderRef.current.stop();
     }
+    setIsRecording(false);
   }, []);
 
   // Toggle speech / recording mode on user click
-  const toggleListening = useCallback(() => {
-    if (isRecording) {
+  const toggleListening = useCallback(async () => {
+    if (isRecording || isListening) {
+      // User tapped Stop & Send
+      shouldRestartRef.current = false;
+      const text = flushTranscript();
       stopRecordingAudio();
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop();
+        } catch {}
+      }
+      setIsListening(false);
+      setIsRecording(false);
+      setStatusMessage('');
     } else {
-      startRecognition();
-      startRecordingAudio();
+      // User tapped Tap to Speak
+      await startRecognition();
+      await startRecordingAudio();
     }
-  }, [isRecording, startRecognition, startRecordingAudio, stopRecordingAudio]);
+  }, [flushTranscript, isListening, isRecording, startRecognition, startRecordingAudio, stopRecordingAudio]);
 
   useEffect(() => {
     if (isMicActive && !isBotSpeaking) {
       startRecognition();
-    } else {
+    } else if (!isMicActive) {
       shouldRestartRef.current = false;
       if (recognitionRef.current) {
         try {
@@ -357,6 +371,7 @@ export function useSpeechCapture({
     micLevel,
     hasMicPermission,
     isSupported,
+    statusMessage,
     flushTranscript,
     startRecognition,
     startRecordingAudio,

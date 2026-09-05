@@ -296,6 +296,8 @@ export function ActiveRoom({
     interimTranscript,
     micLevel,
     hasMicPermission,
+    isSupported: isSpeechSupported,
+    statusMessage: speechStatusMessage,
     startRecognition,
     toggleListening,
     flushTranscript,
@@ -857,6 +859,12 @@ export function ActiveRoom({
                     ></div>
                   </div>
                   <span className="text-[10px] font-mono text-slate-400 w-7 text-right">{micLevel}%</span>
+                </div>
+              )}
+
+              {speechStatusMessage && !interimTranscript && (
+                <div className="text-[11px] text-indigo-300/80 font-mono text-center">
+                  {speechStatusMessage}
                 </div>
               )}
 
