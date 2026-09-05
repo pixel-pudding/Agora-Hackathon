@@ -20,15 +20,121 @@ type RespondRequest = {
 };
 
 const SYSTEM_PROMPT =
-  'You are EchoOps, an expert SRE triage lead. Triage outages, pinpoint probable causes, suggest rollbacks or diagnostic commands, and ask focused operational questions. Be direct, calm, authoritative, and concise: respond in strictly 2–3 spoken sentences maximum. Use plain conversational text only, with no markdown, bullets, or bold text, suitable for TTS playback.';
-const PROMPT_CHAR_LIMIT = 2000;
+  'You are EchoOps, an expert SRE triage lead. Triage outages, pinpoint probable causes, suggest safe rollbacks or diagnostic commands, and ask focused operational questions. ' +
+  'Enforce a strictly blameless incident culture: focus solely on systems, telemetry, and architecture; never assign personal blame or single out individuals. ' +
+  'Operational safety rules: Never suggest destructive commands (such as rm -rf, dropping databases or tables, or permanent data deletion) without explicit human confirmation. ' +
+  'Require explicit human confirmation before executing or recommending any production failover. ' +
+  'Be direct, calm, authoritative, and concise: respond in strictly 2–3 spoken sentences maximum. Use plain conversational text only, with no markdown, bullets, or bold text, suitable for TTS playback.';
+
+const PROMPT_CHAR_LIMIT = 2400;
 const HISTORY_MESSAGE_LIMIT = 8;
-const SYSTEM_PROMPT_CHAR_LIMIT = 900;
+const SYSTEM_PROMPT_CHAR_LIMIT = 1400;
 const HISTORY_MESSAGE_CHAR_LIMIT = 80;
 const TRANSCRIPT_CHAR_LIMIT = 350;
+const LLM_TIMEOUT_MS = 4000;
 
 const FALLBACK_REPLY =
   'Check the connection-pool saturation and error rate first, then compare them with the last deployment. If the pool is exhausted after a recent change, roll back that release while collecting a short stack trace and database connection count.';
+
+type HeuristicRule = {
+  id: string;
+  pattern: RegExp;
+  response: string;
+};
+
+// Pre-compiled local heuristic responses for network timeouts, 429 rate limits, and offline fallback
+const HEURISTIC_RULES: HeuristicRule[] = [
+  {
+    id: 'gateway-timeout-504',
+    pattern: /\b504\b|gateway\s*timeout/i,
+    response:
+      'Elevated gateway timeouts detected. Recommending downstream dependency health checks.',
+  },
+  {
+    id: 'bad-gateway-502',
+    pattern: /\b502\b|bad\s*gateway/i,
+    response:
+      '502 Bad Gateway errors detected. Verifying ingress proxy routing and upstream pod readiness.',
+  },
+  {
+    id: 'service-unavailable-503',
+    pattern: /\b503\b|service\s*unavailable/i,
+    response:
+      '503 Service Unavailable errors detected. Checking service mesh routing, pod readiness probes, and upstream target capacity.',
+  },
+  {
+    id: 'internal-server-error-500',
+    pattern: /\b500\b|internal\s*server\s*error/i,
+    response:
+      'Internal 500 server errors detected. Inspecting recent application exception logs and uncaught error stack traces.',
+  },
+  {
+    id: 'rate-limit-429',
+    pattern: /\b429\b|rate\s*limit|throttl/i,
+    response:
+      'Rate limit thresholds exceeded. Implementing immediate client backoff with jitter and verifying token bucket quotas.',
+  },
+  {
+    id: 'database-connection-pool',
+    pattern: /connection[- ]?pool|exhaust|pool\s*saturation|\bdb\b|database/i,
+    response:
+      'Database connection pool saturation detected. Check active connection limits, slow queries, and consider scaling replicas.',
+  },
+  {
+    id: 'high-cpu',
+    pattern: /high\s*cpu|cpu\s*spike|cpu\s*saturation|100%\s*cpu/i,
+    response:
+      'High CPU utilization detected across workload nodes. Recommending thread profiling and temporary horizontal pod scaling.',
+  },
+  {
+    id: 'memory-oom',
+    pattern: /oom|out\s*of\s*memory|oomkilled|memory\s*leak/i,
+    response:
+      'Memory exhaustion or OOM kills detected. Recommending container heap inspection and checking for recent memory leak regressions.',
+  },
+  {
+    id: 'latency-p99',
+    pattern: /latency|slow|p99|p95|response\s*time/i,
+    response:
+      'Elevated latency spike detected. Recommending downstream dependency tracing and slow query profile checks.',
+  },
+  {
+    id: 'production-failover',
+    pattern: /failover|traffic\s*shift|switchover|dns\s*cutover/i,
+    response:
+      'Production failover candidate identified. Explicit human confirmation is required before redirecting live production traffic.',
+  },
+  {
+    id: 'destructive-command',
+    pattern: /rm\s+-rf|drop\s+table|drop\s+database|truncate\s+table/i,
+    response:
+      'Destructive operational action detected. Commands that permanently alter or delete data require explicit human confirmation and peer review.',
+  },
+  {
+    id: 'blame-mitigation',
+    pattern: /who\s*broke|whose\s*fault|who\s*caused|who\s*did\s*this|blame/i,
+    response:
+      'EchoOps operates under a blameless incident culture. We focus exclusively on system telemetry, architectural resilience, and remediation.',
+  },
+];
+
+function getHeuristicFallbackResponse(inputText: string): string {
+  const normalized = inputText.toLowerCase();
+  for (const rule of HEURISTIC_RULES) {
+    if (rule.pattern.test(normalized)) {
+      return rule.response;
+    }
+  }
+  return FALLBACK_REPLY;
+}
+
+function createTimeoutSignal(timeoutMs: number, parentSignal?: AbortSignal): AbortSignal {
+  const timeoutSignal = AbortSignal.timeout(timeoutMs);
+  if (parentSignal) {
+    return AbortSignal.any([parentSignal, timeoutSignal]);
+  }
+  return timeoutSignal;
+}
 
 type ToolCall = {
   id: string;
@@ -130,10 +236,10 @@ function sseEvent(payload: Record<string, unknown>): Uint8Array {
   return new TextEncoder().encode(`data: ${JSON.stringify(payload)}\n\n`);
 }
 
-function createFallbackStream(): ReadableStream<Uint8Array> {
+function createFallbackStream(text: string = FALLBACK_REPLY): ReadableStream<Uint8Array> {
   return new ReadableStream({
     start(controller) {
-      controller.enqueue(sseEvent({ type: 'chunk', text: FALLBACK_REPLY }));
+      controller.enqueue(sseEvent({ type: 'chunk', text }));
       controller.enqueue(sseEvent({ type: 'done', tokensUsed: 0, actionsExecuted: [] }));
       controller.close();
     },
@@ -290,23 +396,27 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Compile full input context for heuristic regex matching (e.g. "504", "pool saturation", etc.)
+  const combinedContext = [
+    typeof body.transcript === 'string' ? body.transcript : '',
+    ...getStringList(body.activeAlerts),
+    ...getStringList(body.recentEvents),
+    getString(body.serviceName) ?? '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+  const fallbackText = getHeuristicFallbackResponse(combinedContext);
+
   const apiKey = process.env.OPENAI_API_KEY;
   const systemPrompt = assembleSystemPrompt(body);
 
   if (!apiKey) {
-    return streamResponse(
-      new ReadableStream({
-        start(controller) {
-          controller.enqueue(sseEvent({ type: 'chunk', text: FALLBACK_REPLY }));
-          controller.enqueue(sseEvent({ type: 'done', tokensUsed: 0, actionsExecuted: [] }));
-          controller.close();
-        },
-      }),
-    );
+    return streamResponse(createFallbackStream(fallbackText));
   }
 
   try {
     const messages = buildMessages(body, systemPrompt) as OpenAIMessage[];
+    // Strict 4-second timeout on initial LLM call
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -314,11 +424,13 @@ export async function POST(request: NextRequest) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(getOpenAiBody(messages, true)),
+      signal: createTimeoutSignal(LLM_TIMEOUT_MS, request.signal),
     });
 
+    // Fall back to pre-compiled local heuristic responses on 429 (rate limit) or other failure
     if (!response.ok) {
-      console.error('OpenAI response failed:', response.status, await response.text());
-      return streamResponse(createFallbackStream());
+      console.warn('OpenAI request failed (status ' + response.status + '):', await response.text().catch(() => ''));
+      return streamResponse(createFallbackStream(fallbackText));
     }
 
     const stream = new ReadableStream<Uint8Array>({
@@ -338,6 +450,7 @@ export async function POST(request: NextRequest) {
               ...messages,
               ...toolMessages(firstPass.assistantContent, firstPass.toolCalls, actionsExecuted),
             ];
+            // Strict 4-second timeout on follow-up tool-result LLM call
             const followUpResponse = await fetch(
               'https://api.openai.com/v1/chat/completions',
               {
@@ -347,6 +460,7 @@ export async function POST(request: NextRequest) {
                   'Content-Type': 'application/json',
                 },
                 body: JSON.stringify(getOpenAiBody(followUpMessages, false)),
+                signal: createTimeoutSignal(LLM_TIMEOUT_MS, request.signal),
               },
             );
             if (followUpResponse.ok) {
@@ -369,8 +483,8 @@ export async function POST(request: NextRequest) {
           }
           controller.close();
         } catch (error) {
-          console.error('SRE copilot stream failed:', error);
-          emitText(FALLBACK_REPLY);
+          console.warn('SRE copilot stream failed or timed out:', error);
+          emitText(fallbackText);
           controller.enqueue(sseEvent({ type: 'done', tokensUsed: 0, actionsExecuted: [] }));
           controller.close();
         }
@@ -379,7 +493,7 @@ export async function POST(request: NextRequest) {
 
     return streamResponse(stream);
   } catch (error) {
-    console.error('SRE copilot request failed:', error);
-    return streamResponse(createFallbackStream());
+    console.warn('SRE copilot request failed or timed out:', error);
+    return streamResponse(createFallbackStream(fallbackText));
   }
 }

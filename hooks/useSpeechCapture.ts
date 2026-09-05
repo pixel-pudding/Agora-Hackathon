@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-const UTTERANCE_PAUSE_MS = 1500;
+const UTTERANCE_PAUSE_MS = 1200;
 
 type SpeechRecognitionAlternativeLike = {
   transcript: string;
@@ -52,6 +52,7 @@ export type AgoraSpeechUpdate = {
 type UseSpeechCaptureOptions = {
   isMicActive: boolean;
   isVadActive?: boolean;
+  isBotSpeaking?: boolean;
   agoraTranscriptionAvailable?: boolean;
   agoraSpeech?: AgoraSpeechUpdate | null;
   language?: string;
@@ -61,6 +62,7 @@ type UseSpeechCaptureOptions = {
 export function useSpeechCapture({
   isMicActive,
   isVadActive = true,
+  isBotSpeaking = false,
   agoraTranscriptionAvailable = false,
   agoraSpeech,
   language = 'en-US',
@@ -77,6 +79,14 @@ export function useSpeechCapture({
   const shouldRestartRef = useRef(false);
   const lastAgoraIdRef = useRef<string | null>(null);
 
+  const isVadActiveRef = useRef(isVadActive);
+  const isBotSpeakingRef = useRef(isBotSpeaking);
+
+  useEffect(() => {
+    isVadActiveRef.current = isVadActive;
+    isBotSpeakingRef.current = isBotSpeaking;
+  }, [isVadActive, isBotSpeaking]);
+
   const flushTranscript = useCallback(() => {
     const text = `${pendingTranscriptRef.current} ${interimTranscriptRef.current}`.trim();
     pendingTranscriptRef.current = '';
@@ -91,8 +101,24 @@ export function useSpeechCapture({
     callbackRef.current = onUtteranceComplete;
   }, [onUtteranceComplete]);
 
+  // If the bot begins speaking, immediately discard any partial/interim transcript
+  // and cancel pending silence timers to prevent transcribing the bot's own voice.
+  useEffect(() => {
+    if (isBotSpeaking) {
+      interimTranscriptRef.current = '';
+      setInterimTranscript('');
+      if (pauseTimerRef.current) {
+        clearTimeout(pauseTimerRef.current);
+        pauseTimerRef.current = null;
+      }
+    }
+  }, [isBotSpeaking]);
+
   useEffect(() => {
     if (!agoraSpeech || !agoraSpeech.text.trim()) return;
+    // Guard: ignore incoming transcript if VAD is inactive or bot is speaking
+    if (!isVadActive || isBotSpeaking) return;
+
     const updateKey = agoraSpeech.id
       ? `${agoraSpeech.id}:${agoraSpeech.isFinal ? 'final' : 'interim'}`
       : null;
@@ -109,10 +135,10 @@ export function useSpeechCapture({
       interimTranscriptRef.current = text;
       setInterimTranscript(text);
     }
-  }, [agoraSpeech]);
+  }, [agoraSpeech, isBotSpeaking, isVadActive]);
 
   useEffect(() => {
-    if (!isMicActive || !isVadActive || !agoraTranscriptionAvailable || !agoraSpeech?.isFinal) {
+    if (!isMicActive || !isVadActive || isBotSpeaking || !agoraTranscriptionAvailable || !agoraSpeech?.isFinal) {
       return;
     }
 
@@ -124,10 +150,11 @@ export function useSpeechCapture({
     return () => {
       if (pauseTimerRef.current) clearTimeout(pauseTimerRef.current);
     };
-  }, [agoraSpeech, agoraTranscriptionAvailable, flushTranscript, isMicActive, isVadActive]);
+  }, [agoraSpeech, agoraTranscriptionAvailable, flushTranscript, isBotSpeaking, isMicActive, isVadActive]);
 
   useEffect(() => {
-    if (!isMicActive || !isVadActive || agoraTranscriptionAvailable || typeof window === 'undefined') {
+    // Mute browser speech recognition while mic is off, VAD is inactive, bot is speaking, or Agora transcription is handling STT
+    if (!isMicActive || !isVadActive || isBotSpeaking || agoraTranscriptionAvailable || typeof window === 'undefined') {
       shouldRestartRef.current = false;
       recognitionRef.current?.stop();
       recognitionRef.current = null;
@@ -150,6 +177,7 @@ export function useSpeechCapture({
     shouldRestartRef.current = true;
 
     recognition.onresult = (event) => {
+      if (isBotSpeakingRef.current || !isVadActiveRef.current) return;
       let interim = '';
       let finalized = '';
 
@@ -214,7 +242,7 @@ export function useSpeechCapture({
       recognitionRef.current = null;
       setIsListening(false);
     };
-  }, [agoraTranscriptionAvailable, flushTranscript, isMicActive, isVadActive, language]);
+  }, [agoraTranscriptionAvailable, flushTranscript, isBotSpeaking, isMicActive, isVadActive, language]);
 
   return { isListening, interimTranscript, finalTranscript, flushTranscript };
 }
