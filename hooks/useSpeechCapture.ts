@@ -76,6 +76,8 @@ export function useSpeechCapture({
   const [finalTranscript, setFinalTranscript] = useState('');
   const [micLevel, setMicLevel] = useState(0);
   const [hasMicPermission, setHasMicPermission] = useState<boolean | null>(null);
+  const [permissionState, setPermissionState] = useState<'prompt' | 'granted' | 'denied' | 'unknown'>('unknown');
+  const [micErrorDetails, setMicErrorDetails] = useState<string | null>(null);
   const [isSupported, setIsSupported] = useState(true);
   const [statusMessage, setStatusMessage] = useState('');
 
@@ -99,6 +101,31 @@ export function useSpeechCapture({
     callbackRef.current = onUtteranceComplete;
   }, [onUtteranceComplete]);
 
+  // Query browser permission status if supported
+  useEffect(() => {
+    if (typeof window === 'undefined' || !navigator.permissions?.query) return;
+    try {
+      navigator.permissions.query({ name: 'microphone' as PermissionName }).then((status) => {
+        setPermissionState(status.state);
+        if (status.state === 'granted') setHasMicPermission(true);
+        if (status.state === 'denied') {
+          setHasMicPermission(false);
+          setMicErrorDetails('Microphone is blocked in browser site settings.');
+        }
+        status.onchange = () => {
+          setPermissionState(status.state);
+          if (status.state === 'granted') {
+            setHasMicPermission(true);
+            setMicErrorDetails(null);
+          } else if (status.state === 'denied') {
+            setHasMicPermission(false);
+            setMicErrorDetails('Microphone is blocked in browser site settings.');
+          }
+        };
+      }).catch(() => {});
+    } catch {}
+  }, []);
+
   // Flush and dispatch accumulated transcript
   const flushTranscript = useCallback(() => {
     const text = `${pendingTranscriptRef.current} ${interimTranscriptRef.current}`.trim();
@@ -117,7 +144,13 @@ export function useSpeechCapture({
 
   // Ensure microphone MediaStream is active
   const ensureMediaStream = useCallback(async () => {
-    if (typeof window === 'undefined' || !navigator.mediaDevices?.getUserMedia) return null;
+    if (typeof window === 'undefined') return null;
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setMicErrorDetails('Browser does not support mediaDevices.getUserMedia. Please use Chrome or Edge.');
+      setHasMicPermission(false);
+      return null;
+    }
+
     if (mediaStreamRef.current && mediaStreamRef.current.active) {
       return mediaStreamRef.current;
     }
@@ -133,6 +166,8 @@ export function useSpeechCapture({
 
       mediaStreamRef.current = stream;
       setHasMicPermission(true);
+      setPermissionState('granted');
+      setMicErrorDetails(null);
 
       const AudioCtx =
         window.AudioContext ||
@@ -161,9 +196,22 @@ export function useSpeechCapture({
       }
 
       return stream;
-    } catch (err) {
-      console.warn('Microphone permission notice:', err);
+    } catch (err: unknown) {
+      const errName = (err as Error)?.name || 'Error';
+      const errMsg = (err as Error)?.message || String(err);
+      console.warn('Microphone permission request error:', errName, errMsg);
       setHasMicPermission(false);
+      setPermissionState('denied');
+
+      if (errName === 'NotAllowedError' || errName === 'PermissionDeniedError') {
+        setMicErrorDetails(
+          'Microphone permission was denied. Click the site settings icon (tune/lock) in the URL bar and select "Allow" for Microphone, then reload.',
+        );
+      } else if (errName === 'NotFoundError' || errName === 'DevicesNotFoundError') {
+        setMicErrorDetails('No microphone hardware detected on your device.');
+      } else {
+        setMicErrorDetails(`Microphone access error: ${errMsg}`);
+      }
       return null;
     }
   }, []);
@@ -180,7 +228,8 @@ export function useSpeechCapture({
     if (typeof window === 'undefined') return;
 
     // First ensure we have audio stream / mic permission
-    await ensureMediaStream();
+    const stream = await ensureMediaStream();
+    if (!stream) return;
 
     const SpeechRecognition =
       (window as SpeechRecognitionWindow).SpeechRecognition ??
@@ -188,7 +237,7 @@ export function useSpeechCapture({
 
     if (!SpeechRecognition) {
       setIsSupported(false);
-      setStatusMessage('SpeechRecognition API not supported in this browser. Use Chrome/Edge or type directly.');
+      setStatusMessage('SpeechRecognition API not supported in this browser. Please use Google Chrome or type directly.');
       return;
     }
 
@@ -370,9 +419,12 @@ export function useSpeechCapture({
     finalTranscript,
     micLevel,
     hasMicPermission,
+    permissionState,
+    micErrorDetails,
     isSupported,
     statusMessage,
     flushTranscript,
+    ensureMediaStream,
     startRecognition,
     startRecordingAudio,
     stopRecordingAudio,

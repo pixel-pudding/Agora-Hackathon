@@ -296,8 +296,11 @@ export function ActiveRoom({
     interimTranscript,
     micLevel,
     hasMicPermission,
+    permissionState,
+    micErrorDetails,
     isSupported: isSpeechSupported,
     statusMessage: speechStatusMessage,
+    ensureMediaStream,
     startRecognition,
     toggleListening,
     flushTranscript,
@@ -806,10 +809,28 @@ export function ActiveRoom({
             <BotAudioVisualizer isSpeaking={isBotSpeaking} />
             {speechError && <p className="text-xs text-destructive">{speechError}</p>}
 
+            {/* Microphone Permission Status & Explicit Request Banner */}
             {hasMicPermission === false && (
-              <div className="mb-2 px-3 py-1.5 rounded-lg bg-red-500/20 border border-red-500/40 text-red-300 text-xs flex items-center gap-2">
-                <span>⚠️</span>
-                <span>Microphone access blocked in browser. Click the lock/permission icon in your browser URL bar and allow microphone.</span>
+              <div className="mb-3 p-3 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-200 text-xs flex flex-col sm:flex-row items-center justify-between gap-2 max-w-xl mx-auto shadow-md">
+                <div className="flex items-center gap-2">
+                  <span className="text-base">🎙️</span>
+                  <div>
+                    <div className="font-semibold text-amber-100">Microphone Permission Needed</div>
+                    <div className="text-[11px] text-amber-200/80">
+                      {micErrorDetails || 'Click the button on the right to trigger browser microphone prompt, or allow in URL bar.'}
+                    </div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await ensureMediaStream();
+                    await startRecognition();
+                  }}
+                  className="shrink-0 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs shadow transition-all cursor-pointer"
+                >
+                  Request Mic Access
+                </button>
               </div>
             )}
 
