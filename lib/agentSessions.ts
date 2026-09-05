@@ -46,3 +46,24 @@ export function drainQueue(channel: string) {
   const q = s.queue.splice(0, s.queue.length);
   return q;
 }
+
+export function cancelSpeak(channel: string) {
+  const session = sessions.get(channel);
+  const clearedTasks = session?.queue.splice(0, session.queue.length).length ?? 0;
+  let stoppedActivePlayback = false;
+
+  const cancellableSession = session?.session as
+    | { cancelSpeech?: () => unknown; stopSpeaking?: () => unknown }
+    | undefined;
+  const stopPlayback = cancellableSession?.cancelSpeech ?? cancellableSession?.stopSpeaking;
+  if (stopPlayback) {
+    try {
+      void stopPlayback.call(cancellableSession);
+      stoppedActivePlayback = true;
+    } catch (error) {
+      console.warn(`[agentSessions] failed to stop playback for channel=${channel}:`, error);
+    }
+  }
+
+  return { clearedTasks, stoppedActivePlayback };
+}

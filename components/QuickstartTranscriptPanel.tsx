@@ -13,6 +13,8 @@ type QuickstartTranscriptPanelProps = {
   messageList: TranscriptMessage[];
   currentInProgressMessage: TranscriptMessage | null;
   agentUID: string;
+  assistantReply?: string | null;
+  isAssistantProcessing?: boolean;
 };
 
 function formatMessageTime(createdAt?: number) {
@@ -27,6 +29,8 @@ export function QuickstartTranscriptPanel({
   messageList,
   currentInProgressMessage,
   agentUID,
+  assistantReply,
+  isAssistantProcessing = false,
 }: QuickstartTranscriptPanelProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const messages = useMemo(
@@ -59,12 +63,12 @@ export function QuickstartTranscriptPanel({
         ref={scrollRef}
         className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-4"
       >
-        {messages.length === 0 ? (
+        {messages.length === 0 && !assistantReply && !isAssistantProcessing ? (
           <div className="flex h-full items-center justify-center text-center text-sm text-muted-foreground">
             Start speaking to see the live transcript here.
           </div>
         ) : (
-          messages.map((message, index) => {
+          [...messages, ...(assistantReply ? [{ uid: Number(agentUID), text: assistantReply, turn_id: 'copilot-reply' }] : [])].map((message, index) => {
             const isAgent = String(message.uid) === agentUID;
             const label = isAgent ? 'Agent' : 'You';
             const text = message.text?.trim();
@@ -91,6 +95,11 @@ export function QuickstartTranscriptPanel({
               </article>
             );
           })
+        )}
+        {isAssistantProcessing && (
+          <div className="self-start rounded-xl border border-[#2f2f2f] bg-[#212121] px-3 py-2 text-sm text-[#e7e7e7]">
+            EchoOps is triaging...
+          </div>
         )}
       </div>
     </section>

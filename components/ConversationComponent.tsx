@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import AgoraRTC, {
   useRTCClient,
   useLocalMicrophoneTrack,
@@ -48,9 +48,17 @@ import {
 } from './QuickstartPipelineMetrics';
 import { QuickstartTranscriptPanel } from './QuickstartTranscriptPanel';
 import type { ConversationComponentProps } from '@/types/conversation';
+import { useAiSpeechHandler } from '@/hooks/useAiSpeechHandler';
+import {
+  useSpeechCapture,
+  type AgoraSpeechUpdate,
+} from '@/hooks/useSpeechCapture';
 
 // Cap the displayed issues list to avoid overwhelming the UI during a cascade of errors.
 const MAX_CONNECTION_ISSUES = 6;
+const VAD_THRESHOLD = 25;
+const VAD_START_MS = 200;
+const VAD_SILENCE_MS = 1200;
 
 type AgoraRtcWithParameters = typeof AgoraRTC & {
   setParameter?: (key: string, value: unknown) => void;
@@ -132,12 +140,25 @@ export default function ConversationComponent({
   const [isAgentConnected, setIsAgentConnected] = useState(false);
   const [isConnectionDetailsOpen, setIsConnectionDetailsOpen] = useState(false);
   const [isIncidentHistoryOpen, setIsIncidentHistoryOpen] = useState(false);
+  const [isDebugOpen, setIsDebugOpen] = useState(false);
+  const [isInterrupted, setIsInterrupted] = useState(false);
+  const {
+    processUserSpeech,
+    assistantReply,
+    speechError,
+    isProcessing: isCopilotProcessing,
+    latestMetrics,
+    abortPendingSpeech,
+  } = useAiSpeechHandler({ channel: agoraData.channel });
 
   // Tracks granular RTC connection state for the status dot.
   // Agora states: DISCONNECTED | CONNECTING | CONNECTED | DISCONNECTING | RECONNECTING
   const [connectionState, setConnectionState] = useState<string>('CONNECTING');
   const agentUID = String(DEFAULT_AGENT_UID);
   const [joinedUID, setJoinedUID] = useState<UID>(0);
+  const [agoraTranscriptionAvailable, setAgoraTranscriptionAvailable] =
+    useState(false);
+  const [agoraSpeech, setAgoraSpeech] = useState<AgoraSpeechUpdate | null>(null);
 
   // Transcript + agent state — managed with AgoraVoiceAI (see effect below).
   const [rawTranscript, setRawTranscript] = useState<
@@ -266,9 +287,29 @@ export default function ConversationComponent({
         const forwardedRef = { ids: new Set<string>() } as { ids: Set<string> };
 
         ai.on(AgoraVoiceAIEvents.TRANSCRIPT_UPDATED, (t) => {
+          setAgoraTranscriptionAvailable(true);
           setRawTranscript([...t]);
 
           try {
+            const latestLocalTurn = [...t]
+              .reverse()
+              .find(
+                (item) =>
+                  (item.uid === '0' || String(item.uid) === String(client.uid)) &&
+                  typeof item.text === 'string' &&
+                  item.text.trim(),
+              );
+            if (latestLocalTurn && typeof latestLocalTurn.text === 'string') {
+              setAgoraSpeech({
+                text: latestLocalTurn.text,
+                isFinal: latestLocalTurn.status !== TurnStatus.IN_PROGRESS,
+                id: String(
+                  latestLocalTurn.turn_id ||
+                    `${latestLocalTurn.uid}-${latestLocalTurn._time || 'current'}`,
+                ),
+              });
+            }
+
             // Forward completed (not IN_PROGRESS) turns to our pipeline.
             (t || []).forEach((item: TranscriptHelperItem<Partial<UserTranscription | AgentTranscription>>) => {
               const status = item.status as unknown as number;
@@ -355,6 +396,8 @@ export default function ConversationComponent({
 
     return () => {
       cancelled = true;
+      setAgoraTranscriptionAvailable(false);
+      setAgoraSpeech(null);
       try {
         const ai = AgoraVoiceAI.getInstance();
         if (ai) {
@@ -364,7 +407,7 @@ export default function ConversationComponent({
       } catch {}
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isReady, joinSuccess]);
+  }, [isReady, joinSuccess, processUserSpeech]);
 
   // Raw RTM parsing is kept as a fallback for signaling-level errors and SAL status.
   useEffect(() => {
@@ -490,12 +533,112 @@ export default function ConversationComponent({
       : 'warning';
   }, [connectionState, connectionIssues]);
 
-  const visualizerState = useMemo(
-    () =>
-      mapAgentVisualizerState(agentState, isAgentConnected, connectionState),
-    [agentState, isAgentConnected, connectionState],
-  );
-  const isBotSpeaking = agentState === 'speaking';
+  const visualizerState = isInterrupted
+    ? 'ambient'
+    : isCopilotProcessing
+      ? 'talking'
+      : mapAgentVisualizerState(agentState, isAgentConnected, connectionState);
+  const isBotSpeaking = !isInterrupted &&
+    (agentState === 'speaking' || isCopilotProcessing);
+
+  const vadStartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const vadSilenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isVadActiveRef = useRef(false);
+  const [isVadActive, setIsVadActive] = useState(false);
+
+  useEffect(() => {
+    isVadActiveRef.current = isVadActive;
+  }, [isVadActive]);
+
+  const interruptBotPlayback = useCallback(() => {
+    setIsInterrupted(true);
+    abortPendingSpeech();
+    window.dispatchEvent(new CustomEvent('echoops:bot-interrupt'));
+    remoteUsers
+      .filter((user) => user.uid.toString() === agentUID)
+      .forEach((user) => {
+        const audioTrack = user.audioTrack as unknown as
+          | { stop?: () => void }
+          | undefined;
+        audioTrack?.stop?.();
+      });
+
+    void fetch('/api/bot/speak/cancel', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ channel: agoraData.channel }),
+    }).catch((error) => {
+      console.warn('Failed to cancel bot speech:', error);
+    });
+  }, [abortPendingSpeech, agentUID, agoraData.channel, remoteUsers]);
+
+  const { flushTranscript } = useSpeechCapture({
+    isMicActive: isReady && isEnabled && Boolean(localMicrophoneTrack),
+    isVadActive: isVadActive && !isBotSpeaking,
+    agoraTranscriptionAvailable,
+    agoraSpeech,
+    onUtteranceComplete: processUserSpeech,
+  });
+
+  useEffect(() => {
+    if (!isReady || !joinSuccess || !isEnabled) return;
+
+    client.enableAudioVolumeIndicator();
+    const handleVolumeIndicator = (
+      volumes: Array<{ uid: UID; level: number }>,
+    ) => {
+      const localVolume = volumes.find(
+        (volume) => String(volume.uid) === String(client.uid),
+      );
+      const isAboveThreshold = (localVolume?.level ?? 0) > VAD_THRESHOLD;
+
+      if (isAboveThreshold) {
+        if (vadSilenceTimerRef.current) {
+          clearTimeout(vadSilenceTimerRef.current);
+          vadSilenceTimerRef.current = null;
+        }
+        if (!vadStartTimerRef.current && !isVadActiveRef.current) {
+          vadStartTimerRef.current = setTimeout(() => {
+            vadStartTimerRef.current = null;
+            isVadActiveRef.current = true;
+            setIsVadActive(true);
+            if (isBotSpeaking) interruptBotPlayback();
+          }, VAD_START_MS);
+        }
+        return;
+      }
+
+      if (vadStartTimerRef.current) {
+        clearTimeout(vadStartTimerRef.current);
+        vadStartTimerRef.current = null;
+      }
+      if (isVadActiveRef.current && !vadSilenceTimerRef.current) {
+        vadSilenceTimerRef.current = setTimeout(() => {
+          vadSilenceTimerRef.current = null;
+          isVadActiveRef.current = false;
+          setIsVadActive(false);
+          flushTranscript();
+        }, VAD_SILENCE_MS);
+      }
+    };
+
+    client.on('volume-indicator', handleVolumeIndicator);
+    return () => {
+      client.off('volume-indicator', handleVolumeIndicator);
+      if (vadStartTimerRef.current) clearTimeout(vadStartTimerRef.current);
+      if (vadSilenceTimerRef.current) clearTimeout(vadSilenceTimerRef.current);
+      vadStartTimerRef.current = null;
+      vadSilenceTimerRef.current = null;
+      isVadActiveRef.current = false;
+      setIsVadActive(false);
+    };
+  }, [client, flushTranscript, interruptBotPlayback, isBotSpeaking, isEnabled, isReady, joinSuccess]);
+
+  useEffect(() => {
+    if (agentState !== 'speaking' && !isCopilotProcessing) {
+      setIsInterrupted(false);
+    }
+  }, [agentState, isCopilotProcessing]);
 
   /**
    * Mute/unmute via track.setEnabled() only — usePublish owns publish state.
@@ -559,6 +702,9 @@ export default function ConversationComponent({
             <span className={`inline-flex h-2 w-2 rounded-full ${isAgentConnected ? 'bg-green-500' : 'bg-gray-400'}`} />
             <span className="text-xs text-muted-foreground">{isAgentConnected ? 'Bot live' : 'Bot not present'}</span>
           </div>
+          <Button variant="outline" size="sm" onClick={() => setIsDebugOpen((open) => !open)}>
+            SRE Debug
+          </Button>
           <Button variant="outline" size="sm" onClick={() => setIsIncidentHistoryOpen(true)}>Incident History</Button>
         </div>
       }
@@ -568,11 +714,31 @@ export default function ConversationComponent({
           messageList={messageList}
           currentInProgressMessage={currentInProgressMessage}
           agentUID={agentUID}
+          assistantReply={assistantReply}
+          isAssistantProcessing={isCopilotProcessing}
         />
       }
       visualizer={
         <div className="relative flex h-full min-h-[20rem] w-full max-w-4xl flex-col items-center justify-center" role="region" aria-label="AI agent status visualization">
+          {isDebugOpen && (
+            <div className="absolute right-0 top-0 z-10 rounded-md border border-border bg-card/95 p-3 font-mono text-xs shadow-lg">
+              <div className="mb-2 font-sans font-semibold text-foreground">Voice roundtrip</div>
+              {latestMetrics ? (
+                <div className="space-y-1 text-muted-foreground">
+                  <div>LLM: {Math.round(latestMetrics.t_llm)} ms</div>
+                  <div>Total: {Math.round(latestMetrics.t_total)} ms</div>
+                  <div className="pt-1 text-[10px]">t0 {Math.round(latestMetrics.t0)}</div>
+                  <div className="text-[10px]">t1 {Math.round(latestMetrics.t1)}</div>
+                  <div className="text-[10px]">t2 {Math.round(latestMetrics.t2)}</div>
+                  <div className="text-[10px]">t3 {Math.round(latestMetrics.t3)}</div>
+                </div>
+              ) : (
+                <div className="text-muted-foreground">Waiting for a completed turn</div>
+              )}
+            </div>
+          )}
           <BotAudioVisualizer isSpeaking={isBotSpeaking} />
+          {speechError && <p className="text-xs text-destructive">{speechError}</p>}
           <div className="mb-3 w-full flex items-center justify-center">
             <AgentVisualizer state={visualizerState} size="lg" />
           </div>
