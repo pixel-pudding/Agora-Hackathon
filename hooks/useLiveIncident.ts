@@ -128,19 +128,23 @@ const OWNER_PALETTES = [
   { color: '#dc2626', bg: '#fee2e2' },
 ];
 
-function getInitials(name: string): string {
-  const parts = name.replace(/[\(\)@]/g, '').trim().split(/\s+/);
-  if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
-  return name.slice(0, 2).toUpperCase();
+function getInitials(name?: string | null): string {
+  const safeName = String(name || 'EN');
+  const parts = safeName.replace(/[\(\)@]/g, '').trim().split(/\s+/).filter(Boolean);
+  if (parts.length >= 2 && parts[0] && parts[1]) {
+    return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+  }
+  return safeName.slice(0, 2).toUpperCase();
 }
 
 function parseOwner(rawOwner: unknown, index: number) {
   if (typeof rawOwner === 'object' && rawOwner !== null) {
     const o = rawOwner as Record<string, string>;
+    const name = o.name || 'Engineer';
     return {
-      name: o.name || 'Engineer',
+      name,
       role: o.role || 'SRE',
-      initials: o.initials || getInitials(o.name || 'EN'),
+      initials: o.initials || getInitials(name),
       color: o.color || OWNER_PALETTES[index % OWNER_PALETTES.length].color,
       bg: o.bg || OWNER_PALETTES[index % OWNER_PALETTES.length].bg,
     };

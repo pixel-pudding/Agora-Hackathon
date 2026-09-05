@@ -12,7 +12,8 @@ import {
 
 // Fixes compacted punctuation emitted by some TTS/ASR providers where sentence-ending
 // characters run directly into the next word (e.g. "Hello.World" → "Hello. World").
-export function normalizeTranscriptSpacing(text: string): string {
+export function normalizeTranscriptSpacing(text?: string | null): string {
+  if (!text || typeof text !== 'string') return '';
   return text
     .replace(/([.!?])([A-Za-z])/g, '$1 $2')
     .replace(/,([A-Za-z])/g, ', $1')
