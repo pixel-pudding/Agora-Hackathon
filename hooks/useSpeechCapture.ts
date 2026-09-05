@@ -30,6 +30,7 @@ type SpeechRecognitionLike = {
   continuous: boolean;
   interimResults: boolean;
   lang: string;
+  onstart?: (() => void) | null;
   onend: (() => void) | null;
   onerror: ((event: SpeechRecognitionErrorEventLike) => void) | null;
   onresult: ((event: SpeechRecognitionEventLike) => void) | null;
@@ -110,7 +111,6 @@ export function useSpeechCapture({
         if (status.state === 'granted') setHasMicPermission(true);
         if (status.state === 'denied') {
           setHasMicPermission(false);
-          setMicErrorDetails('Microphone is blocked in browser site settings.');
         }
         status.onchange = () => {
           setPermissionState(status.state);
@@ -119,7 +119,6 @@ export function useSpeechCapture({
             setMicErrorDetails(null);
           } else if (status.state === 'denied') {
             setHasMicPermission(false);
-            setMicErrorDetails('Microphone is blocked in browser site settings.');
           }
         };
       }).catch(() => {});
@@ -142,14 +141,9 @@ export function useSpeechCapture({
     return text;
   }, []);
 
-  // Ensure microphone MediaStream is active
+  // Ensure microphone MediaStream is active (for volume visualizer & MediaRecorder)
   const ensureMediaStream = useCallback(async () => {
-    if (typeof window === 'undefined') return null;
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      setMicErrorDetails('Browser does not support mediaDevices.getUserMedia. Please use Chrome or Edge.');
-      setHasMicPermission(false);
-      return null;
-    }
+    if (typeof window === 'undefined' || !navigator.mediaDevices?.getUserMedia) return null;
 
     if (mediaStreamRef.current && mediaStreamRef.current.active) {
       return mediaStreamRef.current;
@@ -199,37 +193,17 @@ export function useSpeechCapture({
     } catch (err: unknown) {
       const errName = (err as Error)?.name || 'Error';
       const errMsg = (err as Error)?.message || String(err);
-      console.warn('Microphone permission request error:', errName, errMsg);
-      setHasMicPermission(false);
-      setPermissionState('denied');
-
-      if (errName === 'NotAllowedError' || errName === 'PermissionDeniedError') {
-        setMicErrorDetails(
-          'Microphone permission was denied. Click the site settings icon (tune/lock) in the URL bar and select "Allow" for Microphone, then reload.',
-        );
-      } else if (errName === 'NotFoundError' || errName === 'DevicesNotFoundError') {
-        setMicErrorDetails('No microphone hardware detected on your device.');
-      } else {
-        setMicErrorDetails(`Microphone access error: ${errMsg}`);
-      }
+      console.warn('Microphone permission notice:', errName, errMsg);
       return null;
     }
   }, []);
 
-  // Request browser microphone permission on mount or when mic is active
-  useEffect(() => {
-    if (isMicActive) {
-      ensureMediaStream();
-    }
-  }, [isMicActive, ensureMediaStream]);
-
-  // Start continuous Web Speech Recognition
-  const startRecognition = useCallback(async () => {
+  // Start continuous Web Speech Recognition (Independent of getUserMedia)
+  const startRecognition = useCallback(() => {
     if (typeof window === 'undefined') return;
 
-    // First ensure we have audio stream / mic permission
-    const stream = await ensureMediaStream();
-    if (!stream) return;
+    // Trigger audio stream in background for volume meter
+    void ensureMediaStream();
 
     const SpeechRecognition =
       (window as SpeechRecognitionWindow).SpeechRecognition ??
@@ -253,6 +227,11 @@ export function useSpeechCapture({
       recognition.interimResults = true;
       recognition.lang = language;
       shouldRestartRef.current = true;
+
+      recognition.onstart = () => {
+        setIsListening(true);
+        setStatusMessage('Listening...');
+      };
 
       recognition.onresult = (event) => {
         if (isBotSpeakingRef.current) return;
@@ -380,7 +359,7 @@ export function useSpeechCapture({
       setStatusMessage('');
     } else {
       // User tapped Tap to Speak
-      await startRecognition();
+      startRecognition();
       await startRecordingAudio();
     }
   }, [flushTranscript, isListening, isRecording, startRecognition, startRecordingAudio, stopRecordingAudio]);
